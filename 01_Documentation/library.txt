@@ -6,3 +6,5 @@ rtree
 pyyalm
 joblib
 request
+pygdal==3.0.4.11  # https://gis.stackexchange.com/a/124420
+Pillow
