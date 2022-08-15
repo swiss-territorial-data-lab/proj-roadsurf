@@ -22,7 +22,7 @@ generate_training_sets.py:
   debug_mode: True
   datasets:
     zoom_level: 
-    aoi_tiles_geojson: 02_Data/processed/tiles.geojson
+    aoi_tiles_geojson: 02_Data/processed/json/tiles.geojson
     ground_truth_labels_geojson: 02_Data/processed/shapefiles/non_forest_wide_roads.shp
     orthophotos_web_service:
       type: WMS # supported values: 1. MIL = Map Image Layer 2. WMS
@@ -42,3 +42,12 @@ generate_training_sets.py:
     license:
       name: Unknown
       url:
+
+wmts-geoquery.py:
+  debug: True
+  url: https://wmts.geo.admin.ch/EPSG/2056/1.0.0/WMTSCapabilities.xml
+  layer: ch.swisstopo.swissimage-product
+  tiles: 02_Data/processed/json/tiles_aoi.geojson
+  width: 100000
+  time: '2018'
+  tmp: 02_Data/processed/images
