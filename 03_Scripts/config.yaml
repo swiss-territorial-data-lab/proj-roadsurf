@@ -1,0 +1,44 @@
+prepare_data.py:
+  tasks:
+    determine_roads_surfaces: False
+    determine_restricted_AOI: False
+    make_raster_mosaic: False
+    determine_tiles: True
+  input:
+    input_folder: 02_Data/initial
+    input_files:
+      roads: /TLM/Strassen/Roads_inside_AOI.shp
+      roads_param: /TLM/Strassen/Objektarten_to_keep.xlsx
+      forests: /TLM/Clip_Wald_Bodenbedeckung/forests.shp
+      tiles_swissimages10: 02_Data/processed/json/tiles_10cm_SWISSIMAGES.geojson
+  output:
+    output_folder: 02_Data/processed
+    output_files:
+      roads: /shapefiles_gpkg/non_forest_wide_roads.shp
+      restricted_AOI: /shapefiles_gpkg/restricted_AOI.shp
+      tiles_aoi:  /json/tiles_aoi.geojson
+      
+generate_training_sets.py:
+  debug_mode: True
+  datasets:
+    zoom_level: 
+    aoi_tiles_geojson: 02_Data/processed/tiles.geojson
+    ground_truth_labels_geojson: 02_Data/processed/shapefiles/non_forest_wide_roads.shp
+    orthophotos_web_service:
+      type: WMS # supported values: 1. MIL = Map Image Layer 2. WMS
+      url: https://wms.geo.admin.ch/service
+      layers: ch.swisstopo.swissimage
+      srs: "EPSG:2056"
+  output_folder: 02_Data/processed/
+  tile_size: 256 # per side, in pixels
+  overwrite: False
+  n_jobs: 10
+  COCO_metadata:
+    year: 2018
+    version: 1.0
+    description: TLM3D, Roads layer
+    contributor: swisstopo
+    url: https://swisstopo.ch
+    license:
+      name: Unknown
+      url:
