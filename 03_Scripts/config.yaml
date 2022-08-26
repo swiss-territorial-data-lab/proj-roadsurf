@@ -1,18 +1,18 @@
 prepare_data.py:
   tasks:
-    determine_roads_surfaces: False
+    determine_roads_surfaces: True
     determine_restricted_AOI: False
     make_raster_mosaic: False
-    determine_tiles: True
+    determine_tiles: False
   input:
-    input_folder: 02_Data/initial
+    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
     input_files:
       roads: /TLM/Strassen/Roads_inside_AOI.shp
       roads_param: /TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /TLM/Clip_Wald_Bodenbedeckung/forests.shp
-      tiles_swissimages10: 02_Data/processed/json/tiles_10cm_SWISSIMAGES.geojson
+      tiles_swissimages10: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_10cm_SWISSIMAGES.geojson
   output:
-    output_folder: 02_Data/processed
+    output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     output_files:
       roads: /shapefiles_gpkg/non_forest_wide_roads.shp
       restricted_AOI: /shapefiles_gpkg/restricted_AOI.shp
@@ -21,11 +21,11 @@ prepare_data.py:
 generate_training_sets.py:
   debug_mode: True
   datasets:
-    zoom_level: 
-    aoi_tiles_geojson: 02_Data/processed/json/tiles.geojson
+    zoom_level: 17
+    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles.geojson
     ground_truth_labels_geojson: 02_Data/processed/shapefiles/non_forest_wide_roads.shp
     orthophotos_web_service:
-      type: WMS # supported values: 1. MIL = Map Image Layer 2. WMS
+      type: WMTS # supported values: 1. MIL = Map Image Layer 2. WMS 3. WMTS
       url: https://wms.geo.admin.ch/service
       layers: ch.swisstopo.swissimage
       srs: "EPSG:2056"
