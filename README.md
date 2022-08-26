@@ -2,8 +2,8 @@
 
 In progress
 
-Repository for the project on road surfaces.
+Repository for the project on road cover.
 
-First test with the code for wmts access from https://github.com/swiss-territorial-data-lab/detector-interface/tree/master/tools/wmts-geoquery and a random forest.
+First test with a random forest.
 
 Second try with obj detector if first not successful
