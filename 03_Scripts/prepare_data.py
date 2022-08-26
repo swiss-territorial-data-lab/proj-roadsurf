@@ -5,6 +5,7 @@ from itertools import combinations
 import math
 import os, sys
 import argparse
+from tqdm import tqdm
 import yaml
 
 
@@ -113,141 +114,99 @@ if DETERMINE_ROAD_SURFACES:
 
 
     # Erase overlapping zones of roads buffer
+    print('--- Comparing roads for intersections to remove...')
 
-    ## Get the features that intersect with a different class of roads
-    print('Removing overlap between roads of different classes...')
+    ## For roads of different width
+    print('----- Removing overlap between roads of different classes...')
 
-    intersections=gpd.overlay(buffered_roads[['OBJECTID','geometry','OBJEKTART']],buffered_roads,how='intersection')
+    buffered_roads['saved_geom']=buffered_roads.geometry
+    joined_roads=gpd.sjoin(buffered_roads,buffered_roads[['OBJECTID','OBJEKTART','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
 
-    intersect_others_dupli=intersections[intersections['OBJECTID_1']!=intersections['OBJECTID_2']].copy()
-    road_diff_width=intersect_others_dupli[intersect_others_dupli['OBJEKTART_1']!=intersect_others_dupli['OBJEKTART_2']].copy()
-    intersect_others=road_diff_width.drop_duplicates(subset=['OBJECTID_1'])
+    ### Drop excessive rows
+    intersected=joined_roads[joined_roads['OBJECTID_2'].notna()].copy()
+    intersected_not_itself=intersected[intersected['OBJECTID_1']!=intersected['OBJECTID_2']].copy()
+    intersected_roads=intersected_not_itself.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
 
-    id_to_test=intersect_others['OBJECTID_1'].tolist()
+    intersected_roads.reset_index(inplace=True, drop=True)
 
-    ## Sort the dataframe by road size
+    ### Sort the roads so that the widest ones come first
     ### TO DO : automatize this part for when different object classes are kept
-    if 20 in buffered_roads['OBJEKTART']:
-        buffered_roads.loc[buffered_roads['OBJEKTART']==20,'OBJEKTART']=8.5
-        buffered_roads.sort_values(by=['OBJEKTART'],inplace=True)
-        buffered_roads.loc[buffered_roads['OBJEKTART']==8.5,'OBJEKTART']=20
+    intersected_roads.loc[intersected_roads['OBJEKTART_1']==20,'OBJEKTART_1']=8.5
 
-    ## Remove the intersections between roads of different classes
-    print('--- Comparing roads for intersections to remove...')
+    intersect_other_width=intersected_roads[intersected_roads['OBJEKTART_1']<intersected_roads['OBJEKTART_2']].copy()
 
-    poly=buffered_roads.loc[buffered_roads['OBJECTID'].isin(id_to_test),['OBJECTID','geometry','OBJEKTART']].copy()
+    intersect_other_width.sort_values(by=['OBJEKTART_1'],inplace=True)
+    intersect_other_width.loc[intersect_other_width['OBJEKTART_1']==8.5,'OBJEKTART_1']=20
 
+    intersect_other_width.reset_index(inplace=True, drop=True)
+
+    ### Suppress the overlapping intersection
     ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
-    iteration=0
-    nbr_tot_iter=math.comb(poly.shape[0],2)
-    for p1_idx, p2_idx in combinations(poly.index,2):
+    corr_overlap1 = buffered_roads.copy()
+
+    for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
+                desc='Suppressing the overlap of roads with different width'):
         
-        if poly.loc[p1_idx,'geometry'].intersects(poly.loc[p2_idx,'geometry']) and poly.at[p1_idx,'OBJEKTART']!=poly.at[p2_idx,'OBJEKTART']:
-            
-            poly=polygons_diff_without_artifacts(poly,p1_idx,p2_idx)
-            
-        iteration += 1
-        if iteration%1000000==0:
-            percentage=iteration/nbr_tot_iter*100
-            print(f'{round(percentage)}% done')
-
-    print('100% done!')
-
-    poly.rename(columns={'geometry':'geometry_cropped'}, inplace=True)
-    corr_overlap1=buffered_roads.merge(poly,how='left',on='OBJECTID',suffixes=('_org','_cropped'))
-
-    ### Change the corrected geometry
-    print('--- Applying changes in the geometry...')
-
-    geom=[]
-    for idx in corr_overlap1.index:
+        poly1_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
+        poly2_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
         
-        if not pd.isnull(corr_overlap1.at[idx,'geometry_cropped']):
-            geom.append(corr_overlap1.at[idx,'geometry_cropped'])
-        else:
-            geom.append(corr_overlap1.at[idx,'geometry'])
+        corr_overlap1=polygons_diff_without_artifacts(corr_overlap1,poly1_id,poly2_id)
 
-    corr_overlap1.drop(columns={'geometry'},inplace=True)
-    corr_overlap1['geometry']=geom
-    corr_overlap1.set_crs(buffered_roads.crs,inplace=True)
-    corr_overlap1.drop(columns=['OBJEKTART_cropped','geometry_cropped'],inplace=True)
-
+    corr_overlap1.drop(columns=['saved_geom'],inplace=True)
+        
     ## Remove overlapping area between roads of the same class
-    print('Removing overlap between roads of the same classe...')
+    print('----- Removing overlap between roads of the same class...')
 
-    road_same_width=intersect_others_dupli[intersect_others_dupli['OBJEKTART_1']==intersect_others_dupli['OBJEKTART_2']].copy()
-    intersect_others=road_same_width.drop_duplicates(subset=['OBJECTID_1'])
+    save_geom=corr_overlap1.copy()
+    save_geom['saved_geom']=save_geom.geometry
+    joined_roads=gpd.sjoin(save_geom,save_geom[['OBJECTID','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
 
-    df=corr_overlap1.rename(columns={'OBJEKTART_org':'OBJEKTART'},errors='raise')
-    id_to_test=intersect_others['OBJECTID_1'].tolist()
-    poly=df.loc[df['OBJECTID'].isin(id_to_test),['OBJECTID','geometry','OBJEKTART']].copy()
+    ### Drop excessive rows
+    intersected=joined_roads[joined_roads['OBJECTID_2'].notna()].copy()
+    intersected_not_itself=intersected[intersected['OBJECTID_1']!=intersected['OBJECTID_2']].copy()
+    intersected_roads=intersected_not_itself.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
+
+    intersected_roads.reset_index(inplace=True, drop=True)
+
+    ### Get rid of duplicates not on the same row
+    to_drop=[]
+    for idx in tqdm(intersected_roads.index, total=intersected_roads.shape[0],
+                desc='Ereasing duplicates from spatial join'):
+        ir1_objid=intersected_roads.loc[idx,'OBJECTID_1']
+        ir2_objid=intersected_roads.loc[idx,'OBJECTID_2']
+        
+        for ss_idx in intersected_roads[intersected_roads['OBJECTID_1']==ir2_objid].index:
+            
+            if ir1_objid==intersected_roads.loc[ss_idx,'OBJECTID_2'] and idx<ss_idx:
+                to_drop.append(ss_idx)
+
+    intersected_roads.drop(to_drop,inplace=True)
+
+    corr_overlap2=corr_overlap1.copy()
 
     ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
-    print('--- Comparing roads for intersections to remove...')
-
-    iteration=0
-    nbr_iter_tot=math.comb(poly.shape[0],2)
-    for p1_idx, p2_idx in combinations(poly.index,2):
+    for idx in tqdm(intersected_roads.index, total=intersected_roads.shape[0],
+                    desc='Suppressing overlap between equivalent roads'):
         
-        if poly.loc[p1_idx,'geometry'].intersects(poly.loc[p2_idx,'geometry']) and poly.at[p1_idx,'OBJEKTART']==poly.at[p2_idx,'OBJEKTART']:
-            
-            # Store intermediary results back to poly
-            diff=poly.loc[p2_idx,'geometry']-poly.loc[p1_idx,'geometry']
-
-            if diff.geom_type == 'Polygon':
-                temp= poly.loc[p2_idx,'geometry']-poly.loc[p1_idx,'geometry']
-
-            elif diff.geom_type == 'MultiPolygon':
-                # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
-                temp = max((poly.loc[p2_idx,'geometry']-poly.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
-                
-            poly=polygons_diff_without_artifacts(poly,p2_idx,p1_idx)
+        poly1_id = corr_overlap2.index[corr_overlap2['OBJECTID'] == intersected_roads.loc[idx,'OBJECTID_1']].values.astype(int)[0]
+        poly2_id = corr_overlap2.index[corr_overlap2['OBJECTID'] == intersected_roads.loc[idx,'OBJECTID_2']].values.astype(int)[0]
         
-            poly.loc[p2_idx,'geometry']=temp
+        geom1 = corr_overlap2.loc[poly1_id,'geometry']
+        geom2 = corr_overlap2.loc[poly2_id,'geometry']
+
+        # Store intermediary results in variable
+        diff = geom2 - geom1
+        
+        if diff.geom_type == 'Polygon':
+            temp = geom2 - geom1
             
-        iteration += 1
-        if iteration%1000000==0:
-            percentage=iteration/nbr_iter_tot*100
-            print(f'{round(percentage,1)}% done')
+        elif diff.geom_type == 'MultiPolygon':
+            # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
+            temp = max((geom2 - geom1).geoms, key=lambda a: a.area)
 
-    print('100% done!')        
-            
-    poly.rename(columns={'geometry':'geometry_cropped'}, inplace=True)
-    corr_overlap2=df.merge(poly,how='left',on='OBJECTID',suffixes=('_org','_cropped'))
+        corr_overlap2=polygons_diff_without_artifacts(corr_overlap2,poly2_id,poly1_id)
 
-    ### Change the corrected geometry
-    print('--- Applying changes in the geometry...')
-
-    geom=[]
-    for idx in corr_overlap2.index:
-        if not pd.isnull(corr_overlap2.at[idx,'geometry_cropped']):
-            geom.append(corr_overlap2.at[idx,'geometry_cropped'])
-        else:
-            geom.append(corr_overlap2.at[idx,'geometry'])
-
-    corr_overlap2.drop(columns={'geometry'},inplace=True)
-    corr_overlap2['geometry']=geom
-    corr_overlap2.set_crs(buffered_roads.crs,inplace=True)
-    corr_overlap2.drop(columns=['OBJEKTART_cropped','geometry_cropped'],inplace=True)
-
-    ## A try for a faster method
-    '''test=corr_overlap1.rename(columns={'OBJEKTART_org':'OBJEKTART'},errors='raise')
-    test['saved_geom']=test.geometry
-
-    joined_test=gpd.sjoin(test,test[['OBJECTID','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
-    intersected=joined_test[joined_test['OBJECTID_1']!=joined_test['OBJECTID_2']].copy()
-    intersected_no_dupl=intersected.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
-    print(intersected_no_dupl.shape)
-
-    intersected_no_dupl['new_geom']=intersected_no_dupl['geometry'].difference(intersected_no_dupl['saved_geom_2'])
-    intersected_no_dupl.drop(columns={'geometry'},inplace=True)
-    intersected_no_dupl['geometry']=intersected_no_dupl['new_geom']
-
-    intersected_no_dupl.drop(columns={'new_geom','saved_geom_1','index_2','OBJECTID_2','saved_geom_2'},inplace=True)'''
-
-   ## INTERROGATION: should we remove the smallest polygons (risk of shadows or obsacles to important)? Or at least make sure they do not end up in 
-   # the training dataset? Supressing them and just deducting their surface from their neighbours could be feseable, but it may be because
-   # the dataset is very unbalanced.  
+        corr_overlap2.loc[poly2_id,'geometry']=temp
 
     # Exclude the roads potentially under forest canopy
     print('Excluding roads under forest canopy ...')
