@@ -1,12 +1,19 @@
 from ntpath import join
+import math
+
 import geopandas as gpd
 import pandas as pd
-from itertools import combinations
-import math
+import rasterio as rio
+import morecantile
+import pyproj
+
+import requests
+import lxml
 import os, sys
 import argparse
 from tqdm import tqdm
 import yaml
+
 
 
 # Get the configuration
@@ -22,7 +29,7 @@ with open('03_Scripts/config.yaml') as fp:
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 DETERMINE_RESTRICTED_AOI = cfg['tasks']['determine_restricted_AOI']
 MAKE_RASTER_MOSAIC = cfg['tasks']['make_raster_mosaic']
-DETERMINE_TILES=cfg['tasks']['determine_tiles']
+GENERATE_TILES_JSON=cfg['tasks']['generate_tiles_json']
 
 if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not MAKE_RASTER_MOSAIC and not DETERMINE_TILES:
     print('Nothing to do. Exiting!')
@@ -46,11 +53,14 @@ else:
     if DETERMINE_RESTRICTED_AOI:
         RESTRICTED_AOI = OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI']
     
-    if DETERMINE_TILES:
+    if GENERATE_TILES_JSON:
         TILES_AOI = OUTPUT_DIR + OUTPUT['output_files']['tiles_aoi']
+        GPKG_TILES= OUTPUT_DIR + OUTPUT['output_files']['gpkg_tiles']
+        ZOOM_LEVEL=cfg['param_tiles']['zoom_level']
 
 
 # Define functions --------------------------------------------------------------------
+
 def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
     # Make the difference of the geometry at row p2_idx with the one at the row p1_idx
     
@@ -66,7 +76,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
 
     return polygons
 
-def test_crs(crs1,crs2 = "EPSG:2056"):
+def test_crs(crs1, crs2 = "EPSG:2056"):
     try:
         assert(crs1 == crs2), "CRS mismatch between the roads file and the forests file."
     except Exception as e:
@@ -75,6 +85,7 @@ def test_crs(crs1,crs2 = "EPSG:2056"):
 
 # Import files ------------------------------------------------------------------------------------------
 print('Importing files...')
+
 ## Data
 roads=gpd.read_file(ROADS_IN)
 forests=gpd.read_file(FORESTS)
@@ -220,6 +231,7 @@ if DETERMINE_ROAD_SURFACES:
 
     print('Done determining the surface of the roads from lines!')
 
+
 if DETERMINE_RESTRICTED_AOI:
     print('Determing the restricted AOI around the considered roads...')
 
@@ -251,21 +263,28 @@ if MAKE_RASTER_MOSAIC:
     print('Done making the raster mosaic!')
 
 
-if DETERMINE_TILES:
-    print('Downloading tiles from map.geo.admin WMS')
+if GENERATE_TILES_JSON:
+    print('Downloading tiles from map.geo.admin WMS...')
 
     if not DETERMINE_RESTRICTED_AOI:
         AOI_roads_no_forest = gpd.read_file(OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI'])
     
-    test_crs(tiles_swissimages.crs, AOI_roads_no_forest.crs)
+    bboxes_extent_4326=AOI_roads_no_forest.to_crs(epsg=4326).unary_union.bounds
 
-    tiles_in_restricted_aoi=gpd.sjoin(tiles_swissimages,AOI_roads_no_forest, how='inner')
+    # cf. https://developmentseed.org/morecantile/usage/
+    crs_4326 = pyproj.CRS.from_epsg(4327)
 
-    # We want the images from 2018
-    tiles_in_restricted_aoi['datenstand']=2018
+    tms = morecantile.tms.get("WebMercatorQuad")
 
-    tiles_in_restricted_aoi.drop(columns=['index_right', 'FID'], inplace=True)
-    tiles_in_restricted_aoi.reset_index(inplace=True)
+    epsg4326_tiles_gdf = gpd.GeoDataFrame.from_features([tms.feature(x, projected=True) for x in tms.tiles(*bboxes_extent_4326, zooms=[ZOOM_LEVEL])])
+    epsg3857_tiles_gdf= epsg4326_tiles_gdf.set_crs(epsg=3857)
+
+    AOI_roads_no_forest.to_crs(epsg=3857,inplace=True)
+    AOI_roads_no_forest.rename(columns={'FID': 'id_aoi'},inplace=True)
+
+    test_crs(epsg3857_tiles_gdf.crs, AOI_roads_no_forest.crs)
+
+    tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf,AOI_roads_no_forest, how='inner')
 
     print('Done downloading tiles!')
 
@@ -282,9 +301,13 @@ if DETERMINE_RESTRICTED_AOI:
     AOI_roads_no_forest.to_file(RESTRICTED_AOI)
     written_files.append(RESTRICTED_AOI)
 
-if DETERMINE_TILES:
-    tiles_in_restricted_aoi.to_file(TILES_AOI)
-    written_files.append(TILES_AOI)
+if GENERATE_TILES_JSON:
+    # Save in json format for futur use
+    tiles_in_restricted_aoi.to_file(TILES_AOI, driver='GeoJSON')
 
-print('All done!')
-print(f'Written files: {written_files}')
+    # Save in gpkg for information
+    layername="epsg3857_z" + str(ZOOM_LEVEL) + "_tiles"
+    tiles_in_restricted_aoi.to_file(GPKG_TILES, driver='GPKG',layer=layername)
+
+    print('All done!')
+    print(f'Written files: {written_files}')
