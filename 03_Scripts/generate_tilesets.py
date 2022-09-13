@@ -6,11 +6,13 @@ import logging.config
 import time
 import argparse
 import yaml
+import json
+import csv
 import os, sys
 import requests
+
 import geopandas as gpd
 import pandas as pd
-import json
 
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -24,7 +26,7 @@ sys.path.insert(0, parent_dir)
 
 from helpers import MIL     # MIL stands for Map Image Layer, cf. https://pro.arcgis.com/en/pro-app/help/sharing/overview/map-image-layer.htm
 from helpers import WMS     # Web Map Service
-from helpers import WMTS    # Web Map Tiling Service
+from helpers import WMTS_xyz    # Web Map Tiling Service
 from helpers import COCO
 from helpers import misc
 
@@ -159,8 +161,10 @@ if __name__ == "__main__":
     ORTHO_WS_SRS = cfg['datasets']['orthophotos_web_service']['srs']
     if 'layers' in cfg['datasets']['orthophotos_web_service'].keys():
         ORTHO_WS_LAYERS = cfg['datasets']['orthophotos_web_service']['layers']
-    if 'no_data' in cfg['datasets']['orthophotos_web_service'].keys():
-        ORTHO_WS_NO_DATA=cfg['datasets']['orthophotos_web_service']['no_data']
+    if 'parameters' in cfg['datasets']['orthophotos_web_service'].keys():
+        ORTHO_WS_PARAMETERS=cfg['datasets']['orthophotos_web_service']['parameters']
+    else:
+        ORTHO_WS_PARAMETERS={}
 
     AOI_TILES_GEOJSON = cfg['datasets']['aoi_tiles_geojson']
     
@@ -177,6 +181,8 @@ if __name__ == "__main__":
     OVERWRITE = cfg['overwrite']
     TILE_SIZE = cfg['tile_size']
     N_JOBS = cfg['n_jobs']
+
+    # if GT_LABELS_GEOJSON or OTH_LABELS_GEOJSON:
     COCO_YEAR = cfg['COCO_metadata']['year']
     COCO_VERSION = cfg['COCO_metadata']['version']
     COCO_DESCRIPTION = cfg['COCO_metadata']['description']
@@ -302,24 +308,23 @@ if __name__ == "__main__":
 
         image_getter = WMS.get_geotiff
 
-    elif ORTHO_WS_TYPE == 'WMTS':
+    elif ORTHO_WS_TYPE == 'WMTS_XYZ':
         
-        logger.info("(using the WMTS connector)")
+        logger.info("(using the WMTS XYZ connector)")
 
-        job_dict = WMTS.get_job_dict(
+        job_dict = WMTS_xyz.get_job_dict(
             tiles_gdf=aoi_tiles_gdf.to_crs(ORTHO_WS_SRS), # <- note the reprojection
-            WMTS_url=ORTHO_WS_URL, 
-            layers=ORTHO_WS_LAYERS,
+            WMTS_xyz_url=ORTHO_WS_URL, 
             width=TILE_SIZE,
             height=TILE_SIZE, 
             img_path=ALL_IMG_PATH, 
+            param=ORTHO_WS_PARAMETERS,
             srs=ORTHO_WS_SRS,
-            no_data=ORTHO_WS_NO_DATA,
             save_metadata=SAVE_METADATA,
             overwrite=OVERWRITE
         )
 
-        image_getter = WMTS.get_geotiff
+        image_getter = WMTS_xyz.get_geotiff
 
     else:
         logger.critical(f'Web Service of type "{ORTHO_WS_TYPE}" are not yet supported. Exiting.')
@@ -334,15 +339,24 @@ if __name__ == "__main__":
     logger.info("Checking whether all the expected tiles were actually downloaded...")
 
     all_tiles_were_downloaded = True
+    missing=[]
     for job in job_dict.keys():
         if not os.path.isfile(job) or not os.path.isfile(job.replace('.tif', '.json')):
             all_tiles_were_downloaded = False
             logger.warning('Failed task: ', job)
+            missing.append([job.split('/')[-1]])
 
     if all_tiles_were_downloaded:
         logger.info("...done.")
     else:
         logger.critical("Some tiles were not downloaded. Please try to run this script again.")
+
+        with open('/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/missing_files.csv','w') as f:
+            write = csv.writer(f)
+      
+            write.writerow(['missing_files'])
+            write.writerows(missing)
+
         sys.exit(1)
 
 
