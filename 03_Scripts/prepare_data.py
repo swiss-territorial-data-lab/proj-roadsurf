@@ -1,5 +1,6 @@
 from ntpath import join
 import math
+import re
 
 import geopandas as gpd
 import pandas as pd
@@ -29,9 +30,9 @@ with open('03_Scripts/config.yaml') as fp:
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 DETERMINE_RESTRICTED_AOI = cfg['tasks']['determine_restricted_AOI']
 MAKE_RASTER_MOSAIC = cfg['tasks']['make_raster_mosaic']
-GENERATE_TILES_JSON=cfg['tasks']['generate_tiles_json']
+GENERATE_TILES_INFO=cfg['tasks']['generate_tiles_info']
 
-if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not MAKE_RASTER_MOSAIC and not DETERMINE_TILES:
+if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not MAKE_RASTER_MOSAIC and not GENERATE_TILES_INFO:
     print('Nothing to do. Exiting!')
     sys.exit(0)
 else:
@@ -42,7 +43,6 @@ else:
     ROADS_IN = INPUT_DIR + INPUT['input_files']['roads']
     ROADS_PARAM = INPUT_DIR + INPUT['input_files']['roads_param']
     FORESTS = INPUT_DIR + INPUT['input_files']['forests']
-    TILES_SWISSIMAGES = INPUT['input_files']['tiles_swissimages10']
 
     OUTPUT = cfg['output']
     OUTPUT_DIR = OUTPUT['output_folder']
@@ -53,7 +53,7 @@ else:
     if DETERMINE_RESTRICTED_AOI:
         RESTRICTED_AOI = OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI']
     
-    if GENERATE_TILES_JSON:
+    if GENERATE_TILES_INFO:
         TILES_AOI = OUTPUT_DIR + OUTPUT['output_files']['tiles_aoi']
         GPKG_TILES= OUTPUT_DIR + OUTPUT['output_files']['gpkg_tiles']
         ZOOM_LEVEL=cfg['param_tiles']['zoom_level']
@@ -78,7 +78,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
 
 def test_crs(crs1, crs2 = "EPSG:2056"):
     try:
-        assert(crs1 == crs2), "CRS mismatch between the roads file and the forests file."
+        assert(crs1 == crs2), "CRS mismatch between the two files."
     except Exception as e:
         print(e)
         sys.exit(1)
@@ -89,7 +89,6 @@ print('Importing files...')
 ## Data
 roads=gpd.read_file(ROADS_IN)
 forests=gpd.read_file(FORESTS)
-tiles_swissimages=gpd.read_file(TILES_SWISSIMAGES)
 
 ## Other informations
 roads_parameters=pd.read_excel(ROADS_PARAM)
@@ -112,7 +111,7 @@ if DETERMINE_ROAD_SURFACES:
     print('Buffering the roads...')
 
     buffered_roads=joined_roads.copy()
-    buffered_roads['buffered_geom']=buffered_roads.buffer(joined_roads['Width'], cap_style=2)
+    buffered_roads['buffered_geom']=buffered_roads.buffer(joined_roads['Width']/2, cap_style=2)
 
     buffered_roads.drop(columns=['geometry'],inplace=True)
     buffered_roads.rename(columns={'buffered_geom':'geometry'},inplace=True)
@@ -263,8 +262,8 @@ if MAKE_RASTER_MOSAIC:
     print('Done making the raster mosaic!')
 
 
-if GENERATE_TILES_JSON:
-    print('Downloading tiles from map.geo.admin WMS...')
+if GENERATE_TILES_INFO:
+    print('Determination of the information for the tiles to consider...')
 
     if not DETERMINE_RESTRICTED_AOI:
         AOI_roads_no_forest = gpd.read_file(OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI'])
@@ -272,21 +271,32 @@ if GENERATE_TILES_JSON:
     bboxes_extent_4326=AOI_roads_no_forest.to_crs(epsg=4326).unary_union.bounds
 
     # cf. https://developmentseed.org/morecantile/usage/
-    crs_4326 = pyproj.CRS.from_epsg(4327)
+    tms = morecantile.tms.get("WebMercatorQuad")    # epsg:3857
 
-    tms = morecantile.tms.get("WebMercatorQuad")
+    print('Generating the tiles...')
+    epsg3857_tiles_gdf = gpd.GeoDataFrame.from_features([tms.feature(x, projected=True) for x in tqdm(tms.tiles(*bboxes_extent_4326, zooms=[ZOOM_LEVEL]))])
+    epsg3857_tiles_gdf.set_crs(epsg=3857, inplace=True)
 
-    epsg4326_tiles_gdf = gpd.GeoDataFrame.from_features([tms.feature(x, projected=True) for x in tms.tiles(*bboxes_extent_4326, zooms=[ZOOM_LEVEL])])
-    epsg3857_tiles_gdf= epsg4326_tiles_gdf.set_crs(epsg=3857)
+    AOI_roads_no_forest_3857=AOI_roads_no_forest.to_crs(epsg=3857)
+    AOI_roads_no_forest_3857.rename(columns={'FID': 'id_aoi'},inplace=True)
 
-    AOI_roads_no_forest.to_crs(epsg=3857,inplace=True)
-    AOI_roads_no_forest.rename(columns={'FID': 'id_aoi'},inplace=True)
+    print('Checking for intersections with the restricted area of interest...')
+    test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
 
-    test_crs(epsg3857_tiles_gdf.crs, AOI_roads_no_forest.crs)
+    tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf, AOI_roads_no_forest_3857, how='inner')
 
-    tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf,AOI_roads_no_forest, how='inner')
+    print('Setting a formatted id...')
+    tiles_in_restricted_aoi.drop_duplicates('geometry', inplace=True)
+    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right', 'id_aoi'], inplace=True)
+    tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
 
-    print('Done downloading tiles!')
+    xyz=[]
+    for idx in tiles_in_restricted_aoi.index:
+        xyz.append([re.sub('[^0-9]','',coor) for coor in tiles_in_restricted_aoi.loc[idx,'title'].split(',')])
+
+    tiles_in_restricted_aoi['id'] = [x+', '+y+', '+z for x, y, z in xyz]
+
+    print('Done determining the tiles!')
 
 # Save results ------------------------------------------------------------------
 print('Saving files...')
@@ -301,13 +311,18 @@ if DETERMINE_RESTRICTED_AOI:
     AOI_roads_no_forest.to_file(RESTRICTED_AOI)
     written_files.append(RESTRICTED_AOI)
 
-if GENERATE_TILES_JSON:
-    # Save in json format for futur use
-    tiles_in_restricted_aoi.to_file(TILES_AOI, driver='GeoJSON')
+if GENERATE_TILES_INFO:
+    # Save in json format for the (soon-to-be) "old" version of generate_tilesets.py
+    # geojson only supports epsg:4326
+    tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
+    tiles_4326.to_file(TILES_AOI, driver='GeoJSON')
 
-    # Save in gpkg for information
+    # Save in gpkg for the (soon-to-be) new version of generate_tilesets.py
     layername="epsg3857_z" + str(ZOOM_LEVEL) + "_tiles"
     tiles_in_restricted_aoi.to_file(GPKG_TILES, driver='GPKG',layer=layername)
 
-    print('All done!')
-    print(f'Written files: {written_files}')
+    written_files.append(TILES_AOI)
+    written_files.append(layername + ' in the geopackage ' + GPKG_TILES)
+
+print('All done!')
+print(f'Written files: {written_files}')
