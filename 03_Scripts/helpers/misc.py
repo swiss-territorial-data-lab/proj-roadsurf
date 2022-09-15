@@ -254,7 +254,7 @@ def image_metadata_to_affine_transform(image_metadata):
 
 def reformat_xyz(row):
     """
-    convert 'id' string to list of ints for z,x,y
+    convert 'id' string to list of ints for x,y,z
     """
     x, y, z = row['id'].lstrip('(,)').rstrip('(,)').split(',')
     

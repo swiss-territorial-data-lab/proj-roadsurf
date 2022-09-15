@@ -26,11 +26,11 @@ sys.path.insert(0, parent_dir)
 
 from helpers import MIL     # MIL stands for Map Image Layer, cf. https://pro.arcgis.com/en/pro-app/help/sharing/overview/map-image-layer.htm
 from helpers import WMS     # Web Map Service
-from helpers import WMTS_xyz    # Web Map Tiling Service
+from helpers import XYZ    # Web Map Tiling Service
 from helpers import COCO
 from helpers import misc
 
-logging.config.fileConfig('logging.conf')
+logging.config.fileConfig('03_Scripts/logging.conf')
 logger = logging.getLogger('root')
 
 
@@ -121,6 +121,10 @@ def get_COCO_image_and_segmentations(tile, labels, COCO_license_id, output_dir):
 
 
 def check_aoi_tiles(aoi_tiles_gdf):
+    '''
+    Check that the id of the AoI tile is exists and will be accepted by the function reformat_xyz
+    The format should be "(<x>, <y>, <z>)" or "<x>, <y>, <z>"
+    '''
     
     if 'id' not in aoi_tiles_gdf.columns.to_list():
         raise Exception("No 'id' column was found in the AoI tiles dataset.")
@@ -131,6 +135,11 @@ def check_aoi_tiles(aoi_tiles_gdf):
         aoi_tiles_gdf.apply(misc.reformat_xyz, axis=1)
     except:
         raise Exception("IDs do not seem to be well-formatted. Here's how they must look like: (<integer 1>, <integer 2>, <integer 3>), e.g. (<x>, <y>, <z>).")
+
+    if not aoi_tiles_gdf.loc[0,'id'][0]=='(':
+        aoi_tiles_gdf['id']='('+aoi_tiles_gdf['id']
+    if not aoi_tiles_gdf.loc[0,'id'][-1]==')':
+        aoi_tiles_gdf['id']=aoi_tiles_gdf['id']+')'
     
     return
 
@@ -142,14 +151,17 @@ if __name__ == "__main__":
     tic = time.time()
     logger.info('Starting...')
 
-    parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
-    parser.add_argument('config_file', type=str, help='a YAML config file')
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+    # parser.add_argument('config_file', type=str, help='a YAML config file')
+    # args = parser.parse_args()
 
-    logger.info(f"Using {args.config_file} as config file.")
+    # logger.info(f"Using {args.config_file} as config file.")
 
-    with open(args.config_file) as fp:
-        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+    # with open(args.config_file) as fp:
+    #     cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+
+    with open('03_Scripts/config.yaml') as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)['generate_tilesets.py']
 
     # TODO: check whether the configuration file contains the required information
     DEBUG_MODE = cfg['debug_mode']
@@ -182,7 +194,6 @@ if __name__ == "__main__":
     TILE_SIZE = cfg['tile_size']
     N_JOBS = cfg['n_jobs']
 
-    # if GT_LABELS_GEOJSON or OTH_LABELS_GEOJSON:
     COCO_YEAR = cfg['COCO_metadata']['year']
     COCO_VERSION = cfg['COCO_metadata']['version']
     COCO_DESCRIPTION = cfg['COCO_metadata']['description']
@@ -308,13 +319,13 @@ if __name__ == "__main__":
 
         image_getter = WMS.get_geotiff
 
-    elif ORTHO_WS_TYPE == 'WMTS_XYZ':
+    elif ORTHO_WS_TYPE == 'XYZ':
         
-        logger.info("(using the WMTS XYZ connector)")
+        logger.info("(using the XYZ connector)")
 
-        job_dict = WMTS_xyz.get_job_dict(
+        job_dict = XYZ.get_job_dict(
             tiles_gdf=aoi_tiles_gdf.to_crs(ORTHO_WS_SRS), # <- note the reprojection
-            WMTS_xyz_url=ORTHO_WS_URL, 
+            XYZ_url=ORTHO_WS_URL, 
             width=TILE_SIZE,
             height=TILE_SIZE, 
             img_path=ALL_IMG_PATH, 
@@ -324,7 +335,7 @@ if __name__ == "__main__":
             overwrite=OVERWRITE
         )
 
-        image_getter = WMTS_xyz.get_geotiff
+        image_getter = XYZ.get_geotiff
 
     else:
         logger.critical(f'Web Service of type "{ORTHO_WS_TYPE}" are not yet supported. Exiting.')

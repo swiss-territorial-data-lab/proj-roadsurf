@@ -11,7 +11,7 @@ prepare_data.py:
       roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
       roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
-      aoi: /initial/AOI/AOI_Prototyp_Belagsarten.shp
+      aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
       images_bounds: "zip:///mnt/s3/proj-roadsurf/02_Data/initial/images_RS/SIRS_TK.zip"
     images_folder_in: /mnt/s3/proj-roadsurf/02_Data/initial/images_RS/
   output:
@@ -26,6 +26,7 @@ prepare_data.py:
   param_tiles:
     zoom_level: 17  # keep between 17 and 20  
 
+
 RS_images_to_S3.py:
   access_key:
   secret_key:
@@ -34,13 +35,14 @@ RS_images_to_S3.py:
   bucket: proj-roadsurf
   outpath: 02_Data/initial/images_RS/
 
+
 generate_tilesets.py:
   debug_mode: True
   datasets:
     aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi.geojson
     orthophotos_web_service:
-      type: WMTS_XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. WMTS_XYZ
-      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles
+      type: XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. XYZ
+      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif
       srs: "EPSG:3857"
       parameters:
         url: /data/mosaic_3857.json
