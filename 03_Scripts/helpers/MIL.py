@@ -21,8 +21,8 @@ from tqdm import tqdm
 from helpers.misc import reformat_xyz
 
 
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('MIL')
+# logging.config.fileConfig('logging.conf')
+# logger = logging.getLogger('MIL')
 
 
 def bounds_to_bbox(bounds):
@@ -134,7 +134,8 @@ def get_geotiff(mil_url, bbox, width, height, filename, imageSR="2056", bboxSR="
             gdal.Translate(geotiff_filename, src_ds, options=f'-of GTiff -a_srs EPSG:{imageSR}')
             src_ds = None
         except Exception as e:
-            logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            # logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            print(f"Exception in the 'get_geotiff' function: {e}")
 
         os.remove(tiff_filename)
         os.remove(tfw_filename)

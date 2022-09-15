@@ -43,6 +43,7 @@ else:
     ROADS_IN = INPUT_DIR + INPUT['input_files']['roads']
     ROADS_PARAM = INPUT_DIR + INPUT['input_files']['roads_param']
     FORESTS = INPUT_DIR + INPUT['input_files']['forests']
+    AOI = INPUT_DIR + INPUT['input_files']['aoi']
 
     OUTPUT = cfg['output']
     OUTPUT_DIR = OUTPUT['output_folder']
@@ -83,35 +84,38 @@ def test_crs(crs1, crs2 = "EPSG:2056"):
         print(e)
         sys.exit(1)
 
-# Import files ------------------------------------------------------------------------------------------
-print('Importing files...')
-
-## Data
-roads=gpd.read_file(ROADS_IN)
-forests=gpd.read_file(FORESTS)
-
-## Other informations
-roads_parameters=pd.read_excel(ROADS_PARAM)
-
-print('Importations done!')
 
 # Information treatment -----------------------------------------------------------------------------------------
 
-# Filter the roads to consider
-roads_parameters=roads_parameters[roads_parameters['to keep']=='yes']
-roads_parameters.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
+if DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI:
 
-joined_roads=roads.merge(roads_parameters[['GDB-Code','Width']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
+    print('Importing files...')
+
+    ## Geodata
+    roads=gpd.read_file(ROADS_IN)
+    forests=gpd.read_file(FORESTS)
+    aoi=gpd.read_file(AOI)
+
+    ## Other informations
+    roads_parameters=pd.read_excel(ROADS_PARAM)
+
+    # Filter the roads to consider
+    print('Filtering the considered roads...')
+    roads_parameters=roads_parameters[roads_parameters['to keep']=='yes']
+    roads_parameters.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
+
+    joined_roads=roads.merge(roads_parameters[['GDB-Code','Width']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
+    joined_roads_in_aoi=joined_roads.overlay(aoi, how='intersection')
 
 
 if DETERMINE_ROAD_SURFACES:
     print('Determining the surface of the roads from lines...')
 
     # Buffer the roads
-    print('Buffering the roads...')
+    print('-- Buffering the roads...')
 
-    buffered_roads=joined_roads.copy()
-    buffered_roads['buffered_geom']=buffered_roads.buffer(joined_roads['Width']/2, cap_style=2)
+    buffered_roads=joined_roads_in_aoi.copy()
+    buffered_roads['buffered_geom']=buffered_roads.buffer(joined_roads_in_aoi['Width']/2, cap_style=2)
 
     buffered_roads.drop(columns=['geometry'],inplace=True)
     buffered_roads.rename(columns={'buffered_geom':'geometry'},inplace=True)
@@ -124,16 +128,16 @@ if DETERMINE_ROAD_SURFACES:
 
 
     # Erase overlapping zones of roads buffer
-    print('--- Comparing roads for intersections to remove...')
+    print('-- Comparing roads for intersections to remove...')
 
     ## For roads of different width
     print('----- Removing overlap between roads of different classes...')
 
     buffered_roads['saved_geom']=buffered_roads.geometry
-    joined_roads=gpd.sjoin(buffered_roads,buffered_roads[['OBJECTID','OBJEKTART','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
+    joined_roads_in_aoi=gpd.sjoin(buffered_roads,buffered_roads[['OBJECTID','OBJEKTART','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
 
     ### Drop excessive rows
-    intersected=joined_roads[joined_roads['OBJECTID_2'].notna()].copy()
+    intersected=joined_roads_in_aoi[joined_roads_in_aoi['OBJECTID_2'].notna()].copy()
     intersected_not_itself=intersected[intersected['OBJECTID_1']!=intersected['OBJECTID_2']].copy()
     intersected_roads=intersected_not_itself.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
 
@@ -169,10 +173,10 @@ if DETERMINE_ROAD_SURFACES:
 
     save_geom=corr_overlap1.copy()
     save_geom['saved_geom']=save_geom.geometry
-    joined_roads=gpd.sjoin(save_geom,save_geom[['OBJECTID','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
+    joined_roads_in_aoi=gpd.sjoin(save_geom,save_geom[['OBJECTID','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
 
     ### Drop excessive rows
-    intersected=joined_roads[joined_roads['OBJECTID_2'].notna()].copy()
+    intersected=joined_roads_in_aoi[joined_roads_in_aoi['OBJECTID_2'].notna()].copy()
     intersected_not_itself=intersected[intersected['OBJECTID_1']!=intersected['OBJECTID_2']].copy()
     intersected_roads=intersected_not_itself.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
 
@@ -219,7 +223,7 @@ if DETERMINE_ROAD_SURFACES:
         corr_overlap2.loc[poly2_id,'geometry']=temp
 
     # Exclude the roads potentially under forest canopy
-    print('Excluding roads under forest canopy ...')
+    print('-- Excluding roads under forest canopy ...')
 
     test_crs(corr_overlap2.crs, forests.crs)
 
@@ -234,10 +238,10 @@ if DETERMINE_ROAD_SURFACES:
 if DETERMINE_RESTRICTED_AOI:
     print('Determing the restricted AOI around the considered roads...')
 
-    print('Calculating buffer...')
-    width=roads_parameters['Width'].max()+1
+    print('-- Calculating buffer...')
+    width=(roads_parameters['Width'].max()+1)/2
 
-    buffered_roads_aoi=joined_roads.copy()
+    buffered_roads_aoi=joined_roads_in_aoi.copy()
     buffered_roads_aoi['buffered_geom']=buffered_roads_aoi.buffer(width)
     
     buffered_roads_aoi.drop(columns=['geometry'],inplace=True)
@@ -245,7 +249,7 @@ if DETERMINE_RESTRICTED_AOI:
 
     AOI_roads=buffered_roads_aoi.unary_union
 
-    print('Excluding parts under forest canopy...')
+    print('-- Excluding parts under forest canopy...')
     geom={'geometry':[x for x in AOI_roads.geoms]}
     AOI_roads_no_forest=gpd.GeoDataFrame(geom, crs=roads.crs)
 
@@ -254,12 +258,6 @@ if DETERMINE_RESTRICTED_AOI:
     AOI_roads_no_forest=AOI_roads_no_forest.overlay(forests[['UUID','geometry']],how='difference')
 
     print('Done determining the restricted AOI!')
-
-
-if MAKE_RASTER_MOSAIC:
-    print('Making the raster mosaic from drone pictures...')
-
-    print('Done making the raster mosaic!')
 
 
 if GENERATE_TILES_INFO:
@@ -273,21 +271,21 @@ if GENERATE_TILES_INFO:
     # cf. https://developmentseed.org/morecantile/usage/
     tms = morecantile.tms.get("WebMercatorQuad")    # epsg:3857
 
-    print('Generating the tiles...')
+    print('-- Generating the tiles...')
     epsg3857_tiles_gdf = gpd.GeoDataFrame.from_features([tms.feature(x, projected=True) for x in tqdm(tms.tiles(*bboxes_extent_4326, zooms=[ZOOM_LEVEL]))])
     epsg3857_tiles_gdf.set_crs(epsg=3857, inplace=True)
 
     AOI_roads_no_forest_3857=AOI_roads_no_forest.to_crs(epsg=3857)
     AOI_roads_no_forest_3857.rename(columns={'FID': 'id_aoi'},inplace=True)
 
-    print('Checking for intersections with the restricted area of interest...')
+    print('-- Checking for intersections with the restricted area of interest...')
     test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
 
     tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf, AOI_roads_no_forest_3857, how='inner')
 
-    print('Setting a formatted id...')
+    print('-- Setting a formatted id...')
     tiles_in_restricted_aoi.drop_duplicates('geometry', inplace=True)
-    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right', 'id_aoi'], inplace=True)
+    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
 
     xyz=[]

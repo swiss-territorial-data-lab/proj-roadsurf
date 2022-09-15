@@ -21,8 +21,8 @@ from tqdm import tqdm
 
 from helpers.misc import reformat_xyz
 
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('WMS')
+# logging.config.fileConfig('logging.conf')
+# logger = logging.getLogger('WMS')
 
 
 def bounds_to_bbox(bounds):
@@ -155,7 +155,8 @@ def get_geotiff(WMS_url, layers, bbox, width, height, filename, srs="EPSG:3857",
             gdal.Translate(geotiff_filename, src_ds, options=f'-of GTiff -a_srs {srs}')
             src_ds = None
         except Exception as e:
-            logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            # logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            print(f"Exception in the 'get_geotiff' function: {e}")
 
         os.remove(png_filename)
         os.remove(pgw_filename)
@@ -163,7 +164,8 @@ def get_geotiff(WMS_url, layers, bbox, width, height, filename, srs="EPSG:3857",
         return {geotiff_filename: image_metadata}
         
     else:
-        logger.warning(f"Failed to get image from WMS: HTTP Status Code = {r.status_code}, received text = '{r.text}'")
+        # logger.warning(f"Failed to get image from WMS: HTTP Status Code = {r.status_code}, received text = '{r.text}'")
+        print(f"Failed to get image from WMS: HTTP Status Code = {r.status_code}, received text = '{r.text}'")
         return {}
 
 
