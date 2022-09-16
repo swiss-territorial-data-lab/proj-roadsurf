@@ -12,8 +12,6 @@ prepare_data.py:
       roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
-      images_bounds: "zip:///mnt/s3/proj-roadsurf/02_Data/initial/images_RS/SIRS_TK.zip"
-    images_folder_in: /mnt/s3/proj-roadsurf/02_Data/initial/images_RS/
   output:
     output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     output_files:
@@ -21,8 +19,6 @@ prepare_data.py:
       restricted_AOI: /shapefiles_gpkg/restricted_AOI.shp
       tiles_aoi:  /json/tiles_aoi.geojson
       gpkg_tiles: /shapefiles_gpkg/epsg3857_tiles.gpkg
-      mosaic: /images/mosaic.json 
-      images_folder_out: /images
   param_tiles:
     zoom_level: 17  # keep between 17 and 20  
 
@@ -49,7 +45,7 @@ generate_tilesets.py:
         no_data: 0
         return_mask: false
         pixel_selection: lowest
-  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/obj_detector
   tile_size: 256 # per side, in pixels
   overwrite: False
   n_jobs: 10
@@ -67,11 +63,17 @@ generate_tilesets.py:
       supercategory: 'facility'
 
 
-wmts-geoquery.py:
-  debug: True
-  url: https://wmts.geo.admin.ch/EPSG/2056/1.0.0/WMTSCapabilities.xml
-  layer: ch.swisstopo.swissimage-product
-  tiles: 02_Data/processed/json/tiles_aoi.geojson
-  width: 100000
-  time: '2018'
-  tmp: 02_Data/processed/images
+statistical_analysis.py:
+  input:
+    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
+  processed:
+    processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+    input_files:
+      images: /obj_detector/all-images-256
+      roads: /shapefiles_gpkg/non_forest_wide_roads.shp
+      tiles: /json/tiles_aoi.geojson
+    output_files:
+      stats: /tables/statistics_roads.csv
+  final:
+    final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+    stats_by_type: /tables/statistics_roads_by_type.csv
