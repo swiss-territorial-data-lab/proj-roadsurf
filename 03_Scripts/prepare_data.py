@@ -15,6 +15,7 @@ import argparse
 from tqdm import tqdm
 import yaml
 
+from misc_fct import test_crs
 
 
 # Get the configuration
@@ -76,13 +77,6 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
         polygons.loc[p2_idx,'geometry'] = max((polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
 
     return polygons
-
-def test_crs(crs1, crs2 = "EPSG:2056"):
-    try:
-        assert(crs1 == crs2), "CRS mismatch between the two files."
-    except Exception as e:
-        print(e)
-        sys.exit(1)
 
 
 # Information treatment -----------------------------------------------------------------------------------------
