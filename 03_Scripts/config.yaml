@@ -33,7 +33,7 @@ RS_images_to_S3.py:
 
 
 generate_tilesets.py:
-  debug_mode: True
+  debug_mode: False
   datasets:
     aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi.geojson
     orthophotos_web_service:
@@ -64,6 +64,7 @@ generate_tilesets.py:
 
 
 statistical_analysis.py:
+  debug_mode: False
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed:
@@ -77,3 +78,5 @@ statistical_analysis.py:
   final:
     final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
     stats_by_type: /tables/statistics_roads_by_type.csv
+param:
+  threshold: 50

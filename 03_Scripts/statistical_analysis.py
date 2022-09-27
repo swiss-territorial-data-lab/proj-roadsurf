@@ -29,12 +29,12 @@ PROCESSED_FOLDER=PROCESSED['processed_folder']
 FINAL=cfg['final']
 FINAL_FOLDER=FINAL['final_folder']
 
-# Inputs
+## Inputs
 ROADS=PROCESSED_FOLDER + PROCESSED['input_files']['roads']
 TILES_DIR=PROCESSED_FOLDER + PROCESSED['input_files']['images']
 TILES_INFO=PROCESSED_FOLDER + PROCESSED['input_files']['tiles']
 
-# Outputs
+## Outputs
 STATS_ROADS=PROCESSED_FOLDER + PROCESSED['output_files']['stats']
 STATS_TYPE=FINAL_FOLDER+ FINAL['stats_by_type']
 
