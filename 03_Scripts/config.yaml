@@ -3,8 +3,7 @@ prepare_data.py:
   tasks:
     determine_roads_surfaces: False
     determine_restricted_AOI: False
-    make_raster_mosaic: False
-    generate_tiles_info: True
+    generate_tiles_info: False
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -65,18 +64,13 @@ generate_tilesets.py:
 
 statistical_analysis.py:
   debug_mode: False
-  input:
-    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
+  correct_balance: False
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
       images: /obj_detector/all-images-256
       roads: /shapefiles_gpkg/non_forest_wide_roads.shp
       tiles: /json/tiles_aoi.geojson
-    output_files:
-      stats: /tables/statistics_roads.csv
-  final:
-    final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
-    stats_by_type: /tables/statistics_roads_by_type.csv
-param:
-  threshold: 50
+  final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+  param:
+    threshold: 50
