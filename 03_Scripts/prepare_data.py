@@ -1,4 +1,3 @@
-from ntpath import join
 import math
 import re
 
@@ -30,10 +29,9 @@ with open('03_Scripts/config.yaml') as fp:
 # Task to do
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 DETERMINE_RESTRICTED_AOI = cfg['tasks']['determine_restricted_AOI']
-MAKE_RASTER_MOSAIC = cfg['tasks']['make_raster_mosaic']
 GENERATE_TILES_INFO=cfg['tasks']['generate_tiles_info']
 
-if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not MAKE_RASTER_MOSAIC and not GENERATE_TILES_INFO:
+if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not GENERATE_TILES_INFO:
     print('Nothing to do. Exiting!')
     sys.exit(0)
 else:

@@ -1,5 +1,5 @@
 import sys
-
+import os
 
 def test_crs(crs1, crs2 = "EPSG:2056"):
     '''
@@ -12,3 +12,14 @@ def test_crs(crs1, crs2 = "EPSG:2056"):
     except Exception as e:
         print(e)
         sys.exit(1)
+
+def ensure_dir_exists(dirpath):
+    '''
+    Test if a directory exists. If not, make it.
+    '''
+
+    if not os.path.exists(dirpath):
+        os.path.mkdir(dirpath)
+        print(f"The directory {dirpath} was created.")
+
+    return dirpath
