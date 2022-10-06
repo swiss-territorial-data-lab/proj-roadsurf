@@ -19,7 +19,7 @@ def ensure_dir_exists(dirpath):
     '''
 
     if not os.path.exists(dirpath):
-        os.path.mkdir(dirpath)
+        os.makedirs(dirpath)
         print(f"The directory {dirpath} was created.")
 
     return dirpath
