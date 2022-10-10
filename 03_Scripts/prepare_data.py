@@ -14,7 +14,7 @@ import argparse
 from tqdm import tqdm
 import yaml
 
-from misc_fct import test_crs
+import misc_fct
 
 
 # Get the configuration
@@ -44,19 +44,13 @@ else:
     FORESTS = INPUT_DIR + INPUT['input_files']['forests']
     AOI = INPUT_DIR + INPUT['input_files']['aoi']
 
-    OUTPUT = cfg['output']
-    OUTPUT_DIR = OUTPUT['output_folder']
-
-    if DETERMINE_ROAD_SURFACES:
-        ROADS_OUT = OUTPUT_DIR +  OUTPUT['output_files']['roads']
-
-    if DETERMINE_RESTRICTED_AOI:
-        RESTRICTED_AOI = OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI']
+    OUTPUT_DIR = cfg['output_folder']
     
+    DEBUG_MODE=cfg['debug_mode']
+    KUNSTBAUTE_TO_KEEP=[100, 200]
+
     if GENERATE_TILES_INFO:
-        TILES_AOI = OUTPUT_DIR + OUTPUT['output_files']['tiles_aoi']
-        GPKG_TILES= OUTPUT_DIR + OUTPUT['output_files']['gpkg_tiles']
-        ZOOM_LEVEL=cfg['param_tiles']['zoom_level']
+        ZOOM_LEVEL=cfg['zoom_level']
 
 
 # Define functions --------------------------------------------------------------------
@@ -73,6 +67,15 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
     elif diff.geom_type == 'MultiPolygon':
         # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
         polygons.loc[p2_idx,'geometry'] = max((polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
+
+        parts=[poly.area for poly in diff.geoms]
+        parts.sort(reverse=True)
+        
+        for area in parts[1:]:
+            if area>3:
+                print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
+                # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
+                # maintaining the orginal id to trace the roads back at the end.
 
     return polygons
 
@@ -97,8 +100,13 @@ if DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI:
     roads_parameters.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
 
     joined_roads=roads.merge(roads_parameters[['GDB-Code','Width']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
-    joined_roads_in_aoi=joined_roads.overlay(aoi, how='intersection')
+    joined_roads_in_aoi=joined_roads.overlay(aoi[['TILEKEY','geometry']], how='intersection')
 
+    joined_roads_in_aoi=joined_roads_in_aoi[joined_roads_in_aoi['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
+
+    if DEBUG_MODE:
+        joined_roads_in_aoi=joined_roads_in_aoi[1:100]
+    
 
 if DETERMINE_ROAD_SURFACES:
     print('Determining the surface of the roads from lines...')
@@ -151,7 +159,7 @@ if DETERMINE_ROAD_SURFACES:
     corr_overlap1 = buffered_roads.copy()
 
     for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
-                desc='Suppressing the overlap of roads with different width'):
+                desc='-- Suppressing the overlap of roads with different width'):
         
         poly1_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
         poly2_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
@@ -177,7 +185,7 @@ if DETERMINE_ROAD_SURFACES:
     ### Get rid of duplicates not on the same row
     to_drop=[]
     for idx in tqdm(intersected_roads.index, total=intersected_roads.shape[0],
-                desc='Ereasing duplicates from spatial join'):
+                desc='-- Ereasing duplicates from spatial join'):
         ir1_objid=intersected_roads.loc[idx,'OBJECTID_1']
         ir2_objid=intersected_roads.loc[idx,'OBJECTID_2']
         
@@ -192,7 +200,7 @@ if DETERMINE_ROAD_SURFACES:
 
     ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
     for idx in tqdm(intersected_roads.index, total=intersected_roads.shape[0],
-                    desc='Suppressing overlap between equivalent roads'):
+                    desc='-- Suppressing overlap between equivalent roads'):
         
         poly1_id = corr_overlap2.index[corr_overlap2['OBJECTID'] == intersected_roads.loc[idx,'OBJECTID_1']].values.astype(int)[0]
         poly2_id = corr_overlap2.index[corr_overlap2['OBJECTID'] == intersected_roads.loc[idx,'OBJECTID_2']].values.astype(int)[0]
@@ -217,7 +225,11 @@ if DETERMINE_ROAD_SURFACES:
     # Exclude the roads potentially under forest canopy
     print('-- Excluding roads under forest canopy ...')
 
-    test_crs(corr_overlap2.crs, forests.crs)
+    misc_fct.test_crs(corr_overlap2.crs, forests.crs)
+
+    forests['buffered_geom']=forests.buffer(1)
+    forests.drop(columns=['geometry'], inplace=True)
+    forests.rename(columns={'buffered_geom':'geometry'}, inplace=True)
 
     non_forest_roads=corr_overlap2.copy()
     non_forest_roads=non_forest_roads.overlay(forests[['UUID','geometry']],how='difference')
@@ -245,7 +257,7 @@ if DETERMINE_RESTRICTED_AOI:
     geom={'geometry':[x for x in AOI_roads.geoms]}
     AOI_roads_no_forest=gpd.GeoDataFrame(geom, crs=roads.crs)
 
-    test_crs(AOI_roads_no_forest.crs, forests.crs)
+    misc_fct.test_crs(AOI_roads_no_forest.crs, forests.crs)
         
     AOI_roads_no_forest=AOI_roads_no_forest.overlay(forests[['UUID','geometry']],how='difference')
 
@@ -256,7 +268,7 @@ if GENERATE_TILES_INFO:
     print('Determination of the information for the tiles to consider...')
 
     if not DETERMINE_RESTRICTED_AOI:
-        AOI_roads_no_forest = gpd.read_file(OUTPUT_DIR +  OUTPUT['output_files']['restricted_AOI'])
+        AOI_roads_no_forest = gpd.read_file(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg/restricted_AOI.shp'))
     
     bboxes_extent_4326=AOI_roads_no_forest.to_crs(epsg=4326).unary_union.bounds
 
@@ -271,13 +283,13 @@ if GENERATE_TILES_INFO:
     AOI_roads_no_forest_3857.rename(columns={'FID': 'id_aoi'},inplace=True)
 
     print('-- Checking for intersections with the restricted area of interest...')
-    test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
+    misc_fct.test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
 
     tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf, AOI_roads_no_forest_3857, how='inner')
 
     print('-- Setting a formatted id...')
     tiles_in_restricted_aoi.drop_duplicates('geometry', inplace=True)
-    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
+    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right', 'id_aoi'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
 
     xyz=[]
@@ -293,26 +305,29 @@ print('Saving files...')
 
 written_files=[]
 
+path_shp_gpkg=misc_fct.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
+path_json=misc_fct.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
+
 if DETERMINE_ROAD_SURFACES:
-    non_forest_roads.to_file(ROADS_OUT)
-    written_files.append(ROADS_OUT)
+    non_forest_roads.to_file(os.path.join(path_shp_gpkg, 'roads_polygons.shp'))
+    written_files.append('shapefiles_gpkg/roads_polygons.shp')
 
 if DETERMINE_RESTRICTED_AOI:
-    AOI_roads_no_forest.to_file(RESTRICTED_AOI)
-    written_files.append(RESTRICTED_AOI)
+    AOI_roads_no_forest.to_file(os.path.join(path_shp_gpkg, 'restricted_AOI.shp'))
+    written_files.append('shapefiles_gpkg/restricted_AOI.shp')
 
 if GENERATE_TILES_INFO:
     # Save in json format for the (soon-to-be) "old" version of generate_tilesets.py
     # geojson only supports epsg:4326
     tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
-    tiles_4326.to_file(TILES_AOI, driver='GeoJSON')
+    tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
 
     # Save in gpkg for the (soon-to-be) new version of generate_tilesets.py
     layername="epsg3857_z" + str(ZOOM_LEVEL) + "_tiles"
-    tiles_in_restricted_aoi.to_file(GPKG_TILES, driver='GPKG',layer=layername)
+    tiles_in_restricted_aoi.to_file(os.path.join(path_shp_gpkg, 'epsg3857_tiles.gpkg'), driver='GPKG',layer=layername)
 
-    written_files.append(TILES_AOI)
-    written_files.append(layername + ' in the geopackage ' + GPKG_TILES)
+    written_files.append('json/tiles_aoi.geojson')
+    written_files.append(layername + ' in the geopackage shapefiles_gpkg/epsg3857_tiles.gpkg')
 
 print('All done!')
 print(f'Written files: {written_files}')

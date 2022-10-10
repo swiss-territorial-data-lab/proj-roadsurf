@@ -32,6 +32,8 @@ def evplot(ev):
     '''
     Implementation of Kaiser's rule and the Broken stick model (MacArthur, 1957) to determine the number of components to keep in the PCA.
     https://www.mohanwugupta.com/post/broken_stick/ -> adapted for Python
+
+    - ev: eigenvalues
     '''
 
     n=len(ev)
@@ -67,6 +69,9 @@ def determine_pc_num(ev, bsm):
     '''
     Determine the number of principal components to keep and to plot based on 
     the minimum of the Kaiser rule and the broken stick model.
+
+    - ev: eigenvalues
+    - bsm: broken stick model as given by the function "evplot"
     '''
 
     pc_to_keep_kaiser=len([x for x in ev if x>sum(ev)/len(ev)])
@@ -85,6 +90,119 @@ def determine_pc_num(ev, bsm):
 
     return pc_to_keep, pc_to_plot
         
+
+def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
+                dirpath_images='images', file_pca_values='PCA_values.csv',
+                file_pc_to_keep='PC_to_keep_evplot.jpg', file_graph_ind=f'PCA_PC1{pc}_individuals.jpg',
+                file_graph_feat=f'PCA_PC1{pc}_features.jpeg'):
+    '''
+    Calculate a PCA, determine the number of components to keep, plot the individuals and the variables along those components.
+
+    - dataset: dataset from which the PCA will be calculated
+    - features: decriptive variables of the dataset (must be numerical only)
+    - to_describe: explenatory variables or the varaibles to describe with the PCA
+    - dirpath_tables: direcory for the tables
+    - dirpath_images: directory for the images
+    - file_pca_values: csv file where the coordoniates of the individuals after the PCA are saved
+    - file_pc_to_keep: image file where the graphs for the determination of the number of principal components to keep are saved
+    - file_graph_ind: image file where the graph for the individuals is saved
+    - file_graph_feat: image file where the graph for the features is saved
+    '''
+
+    written_files=[]
+
+    # 1. Define the variables and scale
+    dataset.reset_index(drop=True, inplace=True)
+    x=dataset.loc[:,features].values
+    y=dataset.loc[:,to_describe].values
+
+    x = StandardScaler().fit_transform(x)
+
+    # 2. Calculate the PCA
+    pca = PCA(n_components=len(features))
+
+    coor_PC = pca.fit_transform(x)
+
+    coor_PC_df = pd.DataFrame(data = coor_PC, columns = [f"PC{k}" for k in range(1,len(features)+1)])
+    results_PCA = pd.concat([coor_PC_df, dataset[to_describe]], axis = 1)
+
+    results_PCA.to_csv(os.path.join(dirpath_tables, file_pca_values), index=False)
+    written_files.append(file_pca_values)
+
+
+    # 3. Get the number of components to keep
+    eigenvalues=pca.explained_variance_
+    bsm, fig_pc_num = evplot(eigenvalues)
+
+    pc_to_keep, pc_to_plot = determine_pc_num(eigenvalues, bsm)
+
+    fig_pc_num.savefig(os.path.join(dirpath_images, file_pc_to_keep))
+    written_files.append(file_pc_to_keep)
+
+
+    # 4. Plot the graph of the individuals
+    expl_var_ratio=[round(x*100,2) for x in pca.explained_variance_ratio_.tolist()]
+
+    for pc in range(2,pc_to_plot+1):
+        fig = plt.figure(figsize = (8,8))
+
+        ax = fig.add_subplot(1,1,1) 
+        ax.set_xlabel(f'Principal Component 1 ({expl_var_ratio[0]}%)', fontsize = 15)
+        ax.set_ylabel(f'Principal Component {pc} ({expl_var_ratio[1]}%)', fontsize = 15)
+        ax.set_title('PCA for the values of the pixels on each band', fontsize = 20)
+
+        targets = dataset[to_describe].unique().tolist()
+        for target, color in zip(targets,colors):
+            indicesToKeep = results_PCA['road_type'] == target
+            ax.scatter(results_PCA.loc[indicesToKeep, 'PC1']
+                    , results_PCA.loc[indicesToKeep, f'PC{pc}']
+                    , c = plt.cm.get_cmap('hsv', len(targets))
+                    , s = 50)
+        ax.legend(targets)
+        ax.set_aspect(1)
+        ax.grid()
+
+        fig.savefig(os.path.join(dirpath_images, file_graph_ind))
+        written_files.append(file_graph_ind)
+
+        # 5. Plot the graph of the variables
+        labels_column=[f'Principal component {k+1} ({expl_var_ratio[k]}%)' for k in range(len(features))]
+        coor_PC=pd.DataFrame(coor_PC, columns=labels_column)
+
+        loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+
+        # fig = px.scatter(coor_PC, x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)', color=results_PCA['road_type'])
+        fig = px.scatter(pd.DataFrame(columns=labels_column), x = f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)')
+
+        for i, feature in enumerate(features):
+            fig.add_shape(
+                type='line',
+                x0=0, y0=0,
+                x1=loadings[i, 0],
+                y1=loadings[i, 1]
+            )
+
+            fig.add_annotation(
+                x=loadings[i, 0],
+                y=loadings[i, 1],
+                ax=0, ay=0,
+                xanchor="center",
+                yanchor="bottom",
+                text=feature,
+            )
+
+        fig.update_yaxes(
+        scaleanchor = "x",
+        scaleratio = 1,
+        )
+
+        fig.write_image(os.path.join(dirpath_images,file_graph_feat))
+        fig.write_image(os.path.join(dirpath_images,file_graph_feat.replace('jpeg','webp')))
+
+        written_files.append(file_graph_feat)
+        written_files.append(file_graph_feat.replace('jpeg','webp'))
+
+    return written_files
 
 
 # Definition of the constants
@@ -532,7 +650,7 @@ if __name__ == "__main__":
             loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
 
             # fig = px.scatter(coor_PC, x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)', color=results_PCA['road_type'])
-            fig = px.scatter(pd.DataFrame(columns=labels_column),x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component 2 ({expl_var_ratio[1]}%)')
+            fig = px.scatter(pd.DataFrame(columns=labels_column),x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)')
 
             for i, feature in enumerate(features):
                 fig.add_shape(

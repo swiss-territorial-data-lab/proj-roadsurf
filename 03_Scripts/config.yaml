@@ -1,9 +1,9 @@
 prepare_data.py:
-  debug_mode: True
+  debug_mode: False
   tasks:
     determine_roads_surfaces: False
     determine_restricted_AOI: False
-    generate_tiles_info: False
+    generate_tiles_info: True
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -11,20 +11,13 @@ prepare_data.py:
       roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
-  output:
-    output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-    output_files:
-      roads: /shapefiles_gpkg/non_forest_wide_roads.shp
-      restricted_AOI: /shapefiles_gpkg/restricted_AOI.shp
-      tiles_aoi:  /json/tiles_aoi.geojson
-      gpkg_tiles: /shapefiles_gpkg/epsg3857_tiles.gpkg
-  param_tiles:
-    zoom_level: 17  # keep between 17 and 20  
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  zoom_level: 18  # keep between 17 and 20  
 
 
 RS_images_to_S3.py:
-  access_key:
-  secret_key:
+  access_key: ...
+  secret_key: ...
   url: https://s3.pub1.infomaniak.cloud
   datapath: D:\Export_RS\*
   bucket: proj-roadsurf
@@ -37,13 +30,13 @@ generate_tilesets.py:
     aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi.geojson
     orthophotos_web_service:
       type: XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. XYZ
-      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif
+      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&bidx=1&no_data=0&return_mask=false&pixel_selection=lowest
       srs: "EPSG:3857"
-      parameters:
-        url: /data/mosaic_3857.json
-        no_data: 0
-        return_mask: false
-        pixel_selection: lowest
+      # parameters:
+      #   url: /data/mosaic_3857.json
+      #   no_data: 0
+      #   return_mask: false
+      #   pixel_selection: lowest
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/obj_detector
   tile_size: 256 # per side, in pixels
   overwrite: False
@@ -69,7 +62,7 @@ statistical_analysis.py:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
       images: /obj_detector/all-images-256
-      roads: /shapefiles_gpkg/non_forest_wide_roads.shp
+      roads: /shapefiles_gpkg/roads_polygons.shp
       tiles: /json/tiles_aoi.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
