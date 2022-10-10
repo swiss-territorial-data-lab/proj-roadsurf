@@ -6,13 +6,10 @@ import logging.config
 import time
 import argparse
 import yaml
-import json
-import csv
 import os, sys
-import requests
-
 import geopandas as gpd
 import pandas as pd
+import json
 
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -32,43 +29,6 @@ from helpers import misc
 
 logging.config.fileConfig('03_Scripts/logging.conf')
 logger = logging.getLogger('root')
-
-
-def img_md_record_to_tile_id(img_md_record):
-    
-    filename = os.path.split(img_md_record.img_file)[-1]
-    
-    z_x_y = filename.split('.')[0]
-    z, x, y = z_x_y.split('_')
-    
-    return f"({x}, {y}, {z})"
-
-
-def make_hard_link(row):
-
-    if not os.path.isfile(row.img_file):
-        raise Exception('File not found.')
-
-    src_file = row.img_file
-    dst_file = src_file.replace('all', row.dataset)
-
-    dirname = os.path.dirname(dst_file)
-
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-    if os.path.exists(dst_file):
-        os.remove(dst_file)
-
-    os.link(src_file, dst_file)
-
-    return None
-
-
-def my_unpack(list_of_tuples):
-    # cf. https://www.geeksforgeeks.org/python-convert-list-of-tuples-into-list/
-    
-    return [item for t in list_of_tuples for item in t]
 
 
 def read_img_metadata(md_file, all_img_path):
@@ -107,7 +67,7 @@ def get_COCO_image_and_segmentations(tile, labels, COCO_license_id, output_dir):
                                              COCO_image['width'], COCO_image['height'])
             scaled_poly = scaled_poly[:-1] # let's remove the last point
 
-            segmentation = my_unpack(scaled_poly)
+            segmentation = misc.my_unpack(scaled_poly)
 
             try:
                 assert(min(segmentation) >= 0)
@@ -135,7 +95,7 @@ def check_aoi_tiles(aoi_tiles_gdf):
         aoi_tiles_gdf.apply(misc.reformat_xyz, axis=1)
     except:
         raise Exception("IDs do not seem to be well-formatted. Here's how they must look like: (<integer 1>, <integer 2>, <integer 3>), e.g. (<x>, <y>, <z>).")
-
+    
     if not aoi_tiles_gdf['id'].str.startswith('(').all():
         aoi_tiles_gdf['id']='('+aoi_tiles_gdf['id']
     if not aoi_tiles_gdf['id'].str.endswith(')').all():
@@ -170,7 +130,10 @@ if __name__ == "__main__":
     
     ORTHO_WS_TYPE = cfg['datasets']['orthophotos_web_service']['type']
     ORTHO_WS_URL = cfg['datasets']['orthophotos_web_service']['url']
-    ORTHO_WS_SRS = cfg['datasets']['orthophotos_web_service']['srs']
+    if ORTHO_WS_TYPE != 'XYZ':
+        ORTHO_WS_SRS = cfg['datasets']['orthophotos_web_service']['srs']
+    else:
+        ORTHO_WS_SRS = "EPSG:3857" # <- NOTE: this is hard-coded
     if 'layers' in cfg['datasets']['orthophotos_web_service'].keys():
         ORTHO_WS_LAYERS = cfg['datasets']['orthophotos_web_service']['layers']
     if 'parameters' in cfg['datasets']['orthophotos_web_service'].keys():
@@ -191,9 +154,11 @@ if __name__ == "__main__":
 
     SAVE_METADATA = True
     OVERWRITE = cfg['overwrite']
-    TILE_SIZE = cfg['tile_size']
+    if ORTHO_WS_TYPE != 'XYZ':
+        TILE_SIZE = cfg['tile_size']
+    else:
+        TILE_SIZE = None
     N_JOBS = cfg['n_jobs']
-
     COCO_YEAR = cfg['COCO_metadata']['year']
     COCO_VERSION = cfg['COCO_metadata']['version']
     COCO_DESCRIPTION = cfg['COCO_metadata']['description']
@@ -279,7 +244,7 @@ if __name__ == "__main__":
         aoi_tiles_gdf = aoi_tiles_gdf.head(DEBUG_MODE_LIMIT).copy()
 
 
-    ALL_IMG_PATH = os.path.join(OUTPUT_DIR, f"all-images-{TILE_SIZE}")
+    ALL_IMG_PATH = os.path.join(OUTPUT_DIR, f"all-images-{TILE_SIZE}" if TILE_SIZE else "all-images")
 
     if not os.path.exists(ALL_IMG_PATH):
         os.makedirs(ALL_IMG_PATH)
@@ -326,11 +291,7 @@ if __name__ == "__main__":
         job_dict = XYZ.get_job_dict(
             tiles_gdf=aoi_tiles_gdf.to_crs(ORTHO_WS_SRS), # <- note the reprojection
             XYZ_url=ORTHO_WS_URL, 
-            width=TILE_SIZE,
-            height=TILE_SIZE, 
             img_path=ALL_IMG_PATH, 
-            param=ORTHO_WS_PARAMETERS,
-            srs=ORTHO_WS_SRS,
             save_metadata=SAVE_METADATA,
             overwrite=OVERWRITE
         )
@@ -350,24 +311,15 @@ if __name__ == "__main__":
     logger.info("Checking whether all the expected tiles were actually downloaded...")
 
     all_tiles_were_downloaded = True
-    missing=[]
     for job in job_dict.keys():
         if not os.path.isfile(job) or not os.path.isfile(job.replace('.tif', '.json')):
             all_tiles_were_downloaded = False
             logger.warning('Failed task: ', job)
-            missing.append([job.split('/')[-1]])
 
     if all_tiles_were_downloaded:
         logger.info("...done.")
     else:
         logger.critical("Some tiles were not downloaded. Please try to run this script again.")
-
-        with open('/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/missing_files.csv','w') as f:
-            write = csv.writer(f)
-      
-            write.writerow(['missing_files'])
-            write.writerows(missing)
-
         sys.exit(1)
 
 
@@ -467,10 +419,10 @@ if __name__ == "__main__":
     img_md_df.reset_index(inplace=True)
     img_md_df.rename(columns={"index": "img_file"}, inplace=True)
 
-    img_md_df['id'] = img_md_df.apply(img_md_record_to_tile_id, axis=1)
+    img_md_df['id'] = img_md_df.apply(misc.img_md_record_to_tile_id, axis=1)
 
     split_aoi_tiles_with_img_md_gdf = split_aoi_tiles_gdf.merge(img_md_df, on='id', how='left')
-    split_aoi_tiles_with_img_md_gdf.apply(make_hard_link, axis=1)
+    split_aoi_tiles_with_img_md_gdf.apply(misc.make_hard_link, axis=1)
 
     # ------ Generating COCO Annotations
     
@@ -552,9 +504,15 @@ if __name__ == "__main__":
 
     logger.info("You can now open a Linux shell and type the following command in order to create a .tar.gz archive including images and COCO annotations:")
     if GT_LABELS_GEOJSON:
-        logger.info(f"cd {OUTPUT_DIR}; tar -cvf images-{TILE_SIZE}.tar COCO_{{trn,val,tst,oth}}.json && tar -rvf images-{TILE_SIZE}.tar {{trn,val,tst,oth}}-images-256 && gzip < images-{TILE_SIZE}.tar > images-{TILE_SIZE}.tar.gz && rm images-{TILE_SIZE}.tar; cd -")
+        if TILE_SIZE:
+            logger.info(f"cd {OUTPUT_DIR}; tar -cvf images-{TILE_SIZE}.tar COCO_{{trn,val,tst,oth}}.json && tar -rvf images-{TILE_SIZE}.tar {{trn,val,tst,oth}}-images-{TILE_SIZE} && gzip < images-{TILE_SIZE}.tar > images-{TILE_SIZE}.tar.gz && rm images-{TILE_SIZE}.tar; cd -")
+        else:
+            logger.info(f"cd {OUTPUT_DIR}; tar -cvf images.tar COCO_{{trn,val,tst,oth}}.json && tar -rvf images.tar {{trn,val,tst,oth}}-images && gzip < images.tar > images.tar.gz && rm images.tar; cd -")
     else:
-        logger.info(f"cd {OUTPUT_DIR}; tar -cvf images-{TILE_SIZE}.tar COCO_oth.json && tar -rvf images-{TILE_SIZE}.tar oth-images-256 && gzip < images-{TILE_SIZE}.tar > images-{TILE_SIZE}.tar.gz && rm images-{TILE_SIZE}.tar; cd -")
+        if TILE_SIZE:
+            logger.info(f"cd {OUTPUT_DIR}; tar -cvf images-{TILE_SIZE}.tar COCO_oth.json && tar -rvf images-{TILE_SIZE}.tar oth-images-{TILE_SIZE} && gzip < images-{TILE_SIZE}.tar > images-{TILE_SIZE}.tar.gz && rm images-{TILE_SIZE}.tar; cd -")
+        else:
+            logger.info(f"cd {OUTPUT_DIR}; tar -cvf images.tar COCO_oth.json && tar -rvf images.tar oth-images && gzip < images.tar > images.tar.gz && rm images.tar; cd -")
     
     print()
     logger.info("The following files were written. Let's check them out!")
