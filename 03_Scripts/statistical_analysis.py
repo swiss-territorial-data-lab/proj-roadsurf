@@ -11,6 +11,7 @@ import rasterio
 from rasterio.mask import mask
 from rasterstats import zonal_stats
 from shapely.geometry import mapping
+from shapely.geometry.multipolygon import MultiPolygon
 
 import numpy as np
 
@@ -18,6 +19,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import plotly.express as px
 
 import misc_fct
@@ -27,6 +29,75 @@ with open('03_Scripts/config.yaml') as fp:
 
 
 # Definitions of the functions
+
+def get_pixel_values(polygons, tile, pixel_values, **kwargs):
+    '''
+    Extract the value of the raster pixels falling under the mask and save them in a dataframe.
+
+    - polygons: shapefile determining the zones where the pixels are extracted
+    - tile: path to the raster image
+    - pixel_values: dataframe to which the values for the pixels are going to be concatenated
+    - kwargs: additional arguments we would like to pass the dataframe of the pixels
+    '''
+    
+    # extract the geometry in GeoJSON format
+    geoms = polygons.geometry.values # list of shapely geometries
+
+    geoms = [mapping(geoms[0])]
+
+    # extract the raster values values within the polygon 
+    with rasterio.open(tile) as src:
+        out_image, out_transform = mask(src, geoms, crop=True)
+
+    # no data values of the original raster
+    no_data=src.nodata
+
+    if no_data is None:
+        no_data=0
+        # print('The value of "no data" is set to 0 by default.')
+    
+    for band in BANDS:
+
+        # extract the values of the masked array
+        data = out_image[band-1]
+
+        # extract the the valid values
+        val = np.extract(data != no_data, data)
+        val_0 = np.extract(data == no_data, data)
+
+        # print(f'{len(val_0)} pixels equal to the no data value ({no_data}).')
+
+        d=pd.DataFrame({'pix_val':val, 'band_num': band, **kwargs})
+
+        pixel_values = pd.concat([pixel_values, d],ignore_index=True)
+
+    return pixel_values, no_data
+
+def get_df_stats(dataframe, col, results_dict = None, to_df = False):
+    '''
+    Get the min, max, mean, median, std and count of a column in a dataframe and send back a dict or a dataframe
+
+    - dataframe: dataframe from which the statistics will be calculated
+    - col: sting or list of string indicating the column(s) from which the statistics will be calculated
+    - result dict: dictionary for the results with the key 'min', 'max', 'mean', 'median', 'std', and 'count'
+    - to_df: results from dictionary to dataframe
+    '''
+
+    if results_dict==None:
+        results_dict={'min': [], 'max': [], 'mean': [], 'median': [], 'std': [], 'count': []}
+
+    results_dict['min'].append(dataframe[col].min())
+    results_dict['max'].append(dataframe[col].max())
+    results_dict['mean'].append(dataframe[col].mean())
+    results_dict['median'].append(dataframe[col].median())
+    results_dict['std'].append(dataframe[col].std())
+    results_dict['count'].append(dataframe[col].count())
+
+    if to_df:
+        results_df=pd.DataFrame(results_dict)
+        return results_df
+    else:
+        return results_dict
 
 def evplot(ev):
     '''
@@ -91,22 +162,23 @@ def determine_pc_num(ev, bsm):
     return pc_to_keep, pc_to_plot
         
 
-def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
-                dirpath_images='images', file_pca_values='PCA_values.csv',
-                file_pc_to_keep='PC_to_keep_evplot.jpg', file_graph_ind=f'PCA_PC1{pc}_individuals.jpg',
-                file_graph_feat=f'PCA_PC1{pc}_features.jpeg'):
+def calculate_pca(dataset, features, to_describe,
+                dirpath_tables='tables',  dirpath_images='images',
+                file_pca_values='PCA_values.csv', file_pc_to_keep='PC_to_keep_evplot.jpg',
+                file_graph_ind='PCA_PC1{pc}_individuals.jpg', file_graph_feat='PCA_PC1{pc}_features.jpeg'):
     '''
-    Calculate a PCA, determine the number of components to keep, plot the individuals and the variables along those components.
+    Calculate a PCA, determine the number of components to keep, plot the individuals and the variables along those components. The results as saved
+    as files.
 
     - dataset: dataset from which the PCA will be calculated
     - features: decriptive variables of the dataset (must be numerical only)
-    - to_describe: explenatory variables or the varaibles to describe with the PCA
+    - to_describe: explenatory variables or the variables to describe with the PCA (FOR NOW, ONLY ONE EXPLENATORY VARIALBE CAN BE PASSED)
     - dirpath_tables: direcory for the tables
     - dirpath_images: directory for the images
     - file_pca_values: csv file where the coordoniates of the individuals after the PCA are saved
     - file_pc_to_keep: image file where the graphs for the determination of the number of principal components to keep are saved
     - file_graph_ind: image file where the graph for the individuals is saved
-    - file_graph_feat: image file where the graph for the features is saved
+    - file_graph_feat: image file where the graph for the features is saveds
     '''
 
     written_files=[]
@@ -126,7 +198,7 @@ def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
     coor_PC_df = pd.DataFrame(data = coor_PC, columns = [f"PC{k}" for k in range(1,len(features)+1)])
     results_PCA = pd.concat([coor_PC_df, dataset[to_describe]], axis = 1)
 
-    results_PCA.to_csv(os.path.join(dirpath_tables, file_pca_values), index=False)
+    results_PCA.round(3).to_csv(os.path.join(dirpath_tables, file_pca_values), index=False)
     written_files.append(file_pca_values)
 
 
@@ -144,6 +216,7 @@ def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
     expl_var_ratio=[round(x*100,2) for x in pca.explained_variance_ratio_.tolist()]
 
     for pc in range(2,pc_to_plot+1):
+        locals={'pc': pc}
         fig = plt.figure(figsize = (8,8))
 
         ax = fig.add_subplot(1,1,1) 
@@ -152,18 +225,19 @@ def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
         ax.set_title('PCA for the values of the pixels on each band', fontsize = 20)
 
         targets = dataset[to_describe].unique().tolist()
-        for target, color in zip(targets,colors):
+        colors=[key[4:] for key in mcolors.TABLEAU_COLORS.keys()][pc_to_plot]
+        for target, color in zip(targets, colors):
             indicesToKeep = results_PCA['road_type'] == target
             ax.scatter(results_PCA.loc[indicesToKeep, 'PC1']
                     , results_PCA.loc[indicesToKeep, f'PC{pc}']
-                    , c = plt.cm.get_cmap('hsv', len(targets))
+                    , c = color
                     , s = 50)
         ax.legend(targets)
         ax.set_aspect(1)
         ax.grid()
 
-        fig.savefig(os.path.join(dirpath_images, file_graph_ind))
-        written_files.append(file_graph_ind)
+        fig.savefig(os.path.join(dirpath_images, eval(f'f"{file_graph_ind}"', locals)))
+        written_files.append(eval(f'f"{file_graph_ind}"', locals))
 
         # 5. Plot the graph of the variables
         labels_column=[f'Principal component {k+1} ({expl_var_ratio[k]}%)' for k in range(len(features))]
@@ -196,17 +270,19 @@ def calculate_pca(dataset, features, to_describe, dirpath_tables='tables',
         scaleratio = 1,
         )
 
-        fig.write_image(os.path.join(dirpath_images,file_graph_feat))
-        fig.write_image(os.path.join(dirpath_images,file_graph_feat.replace('jpeg','webp')))
+        fig.write_image(os.path.join(dirpath_images, eval(f'f"{file_graph_feat}"', locals)))
+        file_graph_feat_webp=file_graph_feat.replace('jpeg','webp')
+        fig.write_image(os.path.join(dirpath_images, eval(f'f"{file_graph_feat_webp}"', locals)))
 
-        written_files.append(file_graph_feat)
-        written_files.append(file_graph_feat.replace('jpeg','webp'))
+        written_files.append( eval(f'f"{file_graph_feat}"', locals))
+        written_files.append( eval(f'f"{file_graph_feat_webp}"', locals))
 
     return written_files
 
 
 # Definition of the constants
 DEBUG_MODE=cfg['debug_mode']
+USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
 BANDS=range(1,5)
 COUNT_THRESHOLD = 50
@@ -232,9 +308,10 @@ if __name__ == "__main__":
     # Data treatment
     if DEBUG_MODE:
         tiles_info=tiles_info[1:1000]
+        print('Debug mode activated: only 1000 tiles will be processed.')
     
     if roads[roads.is_valid==False].shape[0]!=0:
-       print(f"There are {roads[roads.is_valid==False].shape[0]} invalid geometries for the road.")
+       print(f"There are {roads[roads.is_valid==False].shape[0]} invalid geometries for the roads.")
        sys.exit(1)          
 
     simplified_roads=roads.drop(columns=['ERSTELLUNG', 'ERSTELLU_1', 'HERKUNFT', 'HERKUNFT_J', 'HERKUNFT_M','KUNSTBAUTE', 'WANDERWEGE',
@@ -243,12 +320,23 @@ if __name__ == "__main__":
 
     roads_reproj=simplified_roads.to_crs(epsg=3857)
     tiles_info_reproj=tiles_info.to_crs(epsg=3857)
+
+    fp_list=[]
+    for tile_idx in tiles_info_reproj.index:
+            # Get the name of the tiles
+            x, y, z = tiles_info_reproj.loc[tile_idx,'id'].lstrip('(,)').rstrip('(,)').split(',')
+            im_name = z.lstrip() + '_' + x + '_' + y.lstrip() + '.tif'
+            im_path = os.path.join(TILES_DIR, im_name)
+            fp_list.append(im_path)
+
+    tiles_info_reproj['filepath']=fp_list
+
     misc_fct.test_crs(roads_reproj.crs, tiles_info_reproj.crs)
 
     if roads_reproj[roads_reproj.is_valid==False].shape[0]!=0:
-       print(f"There are {roads_reproj[roads_reproj.is_valid==False].shape[0]} invalid geometries for the road after the reprojection.")
+       print(f"There are {roads_reproj[roads_reproj.is_valid==False].shape[0]} invalid geometries for the roads after the reprojection.")
 
-       print("Correction of the roads presenting an invalid geometry with a buffer...")
+       print("Correction of the roads presenting an invalid geometry with a buffer of 0 m...")
        corrected_roads=roads_reproj.copy()
        corrected_roads.loc[corrected_roads.is_valid==False,'geometry']=corrected_roads[corrected_roads.is_valid==False]['geometry'].buffer(0)
 
@@ -263,46 +351,90 @@ if __name__ == "__main__":
 
 
     ## Determination of the statistics for the road segments
-    roads_stats=pd.DataFrame()
-    fp_list=[]
+    print('Determination of the statistics of the roads...')
 
-    for tile_idx in tqdm(tiles_info_reproj.index, desc='Calculating zonal statistics'):
+    if USE_ZONAL_STATS:
+        roads_stats=pd.DataFrame()
 
-        roads_on_tile=clipped_roads[clipped_roads['tile']==tiles_info_reproj.loc[tile_idx,'title']]
+        for tile_idx in tqdm(tiles_info_reproj.index, desc='Calculating zonal statistics'):
 
-        # Get the name of the tiles
-        x, y, z = tiles_info_reproj.loc[tile_idx,'id'].lstrip('(,)').rstrip('(,)').split(',')
-        im_name = z.lstrip() + '_' + x + '_' + y.lstrip() + '.tif'
-        im_path = os.path.join(TILES_DIR, im_name)
-        fp_list.append(im_path)
+            roads_on_tile=clipped_roads[clipped_roads['tile']==tiles_info_reproj.loc[tile_idx,'title']]
 
-        roads_on_tile.reset_index(drop=True, inplace=True)
+            # Get the path of the tile
+            im_path=tiles_info_reproj.loc[tile_idx,'filepath']
 
-        # Calculation for each road on each band
-        for road_idx in roads_on_tile.index:
+            roads_on_tile.reset_index(drop=True, inplace=True)
 
-            road=roads_on_tile.iloc[road_idx:road_idx+1]
+            # Calculation for each road on each band
+            for road_idx in roads_on_tile.index:
 
-            if road.shape[0]>1:
-                print('More than one road is being tested.')
-                sys.exit(1)
+                road=roads_on_tile.iloc[road_idx:road_idx+1]
 
-            for band_num in BANDS:
+                if road.shape[0]>1:
+                    print('More than one road is being tested.')
+                    sys.exit(1)
 
-                stats=zonal_stats(road, im_path, stats=['min', 'max', 'mean', 'median','std','count'], band=band_num, nodata=0)
-                stats_dict=stats[0]
-                stats_dict['band']=band_num
-                stats_dict['road_id']=road.loc[road_idx,'OBJECTID']
-                stats_dict['road_type']=road.loc[road_idx,'BELAGSART']
-                stats_dict['geometry']=road.loc[road_idx,'geometry']
-                stats_dict['tile_id']=tiles_info_reproj.loc[tile_idx,'id']
+                for band_num in BANDS:
 
-                roads_stats = pd.concat([roads_stats, pd.DataFrame(stats_dict,index=[0])],ignore_index=True)
+                    stats=zonal_stats(road, im_path, stats=['min', 'max', 'mean', 'median','std','count'], band=band_num, nodata=0)
+                    stats_dict=stats[0]
+                    stats_dict['band']=band_num
+                    stats_dict['road_id']=road.loc[road_idx,'OBJECTID']
+                    stats_dict['road_type']=road.loc[road_idx,'BELAGSART']
+                    stats_dict['geometry']=road.loc[road_idx,'geometry']
+                    stats_dict['tile_id']=tiles_info_reproj.loc[tile_idx,'id']
+
+                    roads_stats = pd.concat([roads_stats, pd.DataFrame(stats_dict,index=[0])],ignore_index=True)
+
+    else:
+        roads_stats={'cover':[], 'band':[], 'road_id': [], 'road_type': [], 'geometry': [], 'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'count':[]}
+
+        for road_idx in tqdm(corrected_roads.index, desc='Extracting road statistics from pixels'):
+
+            # Get the characteristics of the road
+            objectid=corrected_roads.loc[road_idx, 'OBJECTID']
+            cover_type=corrected_roads.loc[road_idx, 'BELAGSART']
+            road=corrected_roads.loc[corrected_roads['OBJECTID'] == objectid,['OBJECTID', 'BELAGSART', 'geometry']]
+            road.reset_index(inplace=True, drop=True)
+            geometry = road.loc[0,'geometry'] if road.shape[0]==1 else MultiPolygon([road.loc[k,'geometry'] for k in road.index])
+
+            if objectid in roads_stats['road_id']:
+                continue
+            
+            # Get the corresponding tile(s)
+            misc_fct.test_crs(road.crs, tiles_info_reproj.crs)
+            intersected_tiles=gpd.overlay(tiles_info_reproj, road)
+
+            intersected_tiles.drop_duplicates(subset=['id'], inplace=True)
+            intersected_tiles.reset_index(drop=True, inplace=True)
+
+            pixel_values=pd.DataFrame()
+
+            # Get the pixels for each tile
+            for tile_idx in intersected_tiles.index:
+
+                # Get the name of the tiles
+                x, y, z = intersected_tiles.loc[tile_idx,'id'].lstrip('(,)').rstrip('(,)').split(',')
+                im_name = z.lstrip() + '_' + x + '_' + y.lstrip() + '.tif'
+                im_path = os.path.join(TILES_DIR, im_name)
+
+                pixel_values, no_data=get_pixel_values(road, im_path, pixel_values, road_id=objectid, road_cover=cover_type)
+
+            for band in BANDS:
+                pixels_subset=pixel_values[pixel_values['band_num']==band]
+
+                roads_stats['cover'].append(cover_type)
+                roads_stats['band'].append(band)
+                roads_stats['road_id'].append(objectid)
+                roads_stats['road_type'].append(cover_type)
+                roads_stats['geometry'].append(geometry)
+
+                roads_stats=get_df_stats(pixel_values, 'band_num', roads_stats)
+
+        roads_stats=pd.DataFrame(roads_stats)
 
     roads_stats['mean']=roads_stats['mean'].round(2)
     roads_stats['std']=roads_stats['std'].round(2)
-
-    tiles_info_reproj['filepath']=fp_list
 
     roads_stats_gdf=gpd.GeoDataFrame(roads_stats)
 
@@ -390,7 +522,7 @@ if __name__ == "__main__":
                 fill=[no_data]*max_pixels
                 pixels_per_band[f'band{band}'].extend(fill[len_pixels_serie:])
 
-                print(f'{max_pixels-len_pixels_serie} pixels where missing on the band {band} for the road cover {cover_type}. There where replaced with the value used of no data ({no_data})')
+                print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}. There were replaced with the value used of no data ({no_data})')
 
 
         pixels_per_band['road_type'].extend([cover_type]*len(pixels_list))
@@ -483,104 +615,21 @@ if __name__ == "__main__":
     
 
     ## PCA
-    # cf. https://towardsdatascience.com/pca-using-python-scikit-learn-e653f8989e60
     print('Calculating PCAs...') 
 
     ### PCA of the pixel values
     print('-- PCA of the pixel values...')
-    #### 1. Define the variables and scale
 
-    pixels_per_band.reset_index(drop=True, inplace=True)
-    features = ['NIR', 'R', 'G', 'B']
+    features = ['NIR', 'Red', 'Green', 'Blue']
+    to_describe='road_type'
 
-    x = pixels_per_band.loc[:, features].values
-    y = pixels_per_band.loc[:,['road_type']].values
+    dirpath_tables=misc_fct.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
 
-    x = StandardScaler().fit_transform(x)
+    written_files_pca_pixels=calculate_pca(pixels_per_band, features, to_describe, dirpath_tables, dirpath_images, 
+                f'PCA_pixel_values{balance}.csv', f'PCA_pixels_PC_to_keep_evplot{balance}.jpg',
+                'PCA_pixels_PC1{pc}_'+f'individuals{balance}.jpg', 'PCA_pixels_PC1{pc}_'+f'features{balance}.jpg')
 
-    #### 2. Calculate the PCA
-    pca = PCA(n_components=len(features))
-
-    coor_PC = pca.fit_transform(x)
-
-    coor_PC_df = pd.DataFrame(data = coor_PC, columns = [f"PC{k}" for k in range(1,len(features)+1)])
-    results_PCA = pd.concat([coor_PC_df, pixels_per_band[['road_type']]], axis = 1)
-
-    results_PCA.to_csv(os.path.join(FINAL_FOLDER, f'tables/PCA_pixel_values{balance}.csv'), index=False)
-    written_files.append(f'final/tables/PCA_pixel_values{balance}.csv')
-
-    #### 3. Get the number of components to keep
-    eigenvalues=pca.explained_variance_
-    bsm, fig_pc_num = evplot(eigenvalues)
-
-    pc_to_keep, pc_to_plot = determine_pc_num(eigenvalues, bsm)
-
-    fig_pc_num.savefig(os.path.join(dirpath_images, f'PCA_pixels_PC_to_keep_evplot{balance}.jpg'))
-    written_files.append(f'final/images/PCA_pixels_PC_to_keep_evplot{balance}.jpg')
-
-    #### 4. Plot the graph of the individuals
-    expl_var_ratio=[round(x*100,2) for x in pca.explained_variance_ratio_.tolist()]
-
-    for pc in range(2,pc_to_plot+1):
-        fig = plt.figure(figsize = (8,8))
-
-        ax = fig.add_subplot(1,1,1) 
-        ax.set_xlabel(f'Principal Component 1 ({expl_var_ratio[0]}%)', fontsize = 15)
-        ax.set_ylabel(f'Principal Component {pc} ({expl_var_ratio[1]}%)', fontsize = 15)
-        ax.set_title('PCA for the values of the pixels on each band', fontsize = 20)
-
-        targets = pixels_per_band['road_type'].unique().tolist()
-        colors = ['r', 'b']
-        for target, color in zip(targets,colors):
-            indicesToKeep = results_PCA['road_type'] == target
-            ax.scatter(results_PCA.loc[indicesToKeep, 'PC1']
-                    , results_PCA.loc[indicesToKeep, f'PC{pc}']
-                    , c = color
-                    , s = 50)
-        ax.legend(targets)
-        ax.set_aspect(1)
-        ax.grid()
-
-        fig.savefig(os.path.join(dirpath_images, f'PCA_pixels_PC1{pc}_individuals{balance}.jpg'))
-        written_files.append(f'final/images/PCA_pixels_PC1{pc}_individuals{balance}.jpg')
-
-    #### 5. Plot the graph of the variables
-    labels_column=[f'Principal component {k+1} ({expl_var_ratio[k]}%)' for k in range(len(features))]
-    coor_PC=pd.DataFrame(coor_PC, columns=labels_column)
-
-    loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
-
-    # fig = px.scatter(coor_PC, x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component 2 ({expl_var_ratio[1]}%)', color=results_PCA['road_type'])
-    fig=px.scatter(pd.DataFrame(columns=labels_column),x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component 2 ({expl_var_ratio[1]}%)')
-
-    for i, feature in enumerate(features):
-        fig.add_shape(
-            type='line',
-            x0=0, y0=0,
-            x1=loadings[i, 0],
-            y1=loadings[i, 1]
-        )
-
-        fig.add_annotation(
-            x=loadings[i, 0],
-            y=loadings[i, 1],
-            ax=0, ay=0,
-            xanchor="center",
-            yanchor="bottom",
-            text=feature,
-        )
-
-    fig.update_yaxes(
-    scaleanchor = "x",
-    scaleratio = 1,
-    )
-
-    fig.write_image(os.path.join(dirpath_images,f'PCA_pixels_PC12_features{balance}.jpeg'))
-    fig.write_image(os.path.join(dirpath_images,f'PCA_pixels_PC12_features{balance}.webp'))
-
-    written_files.append(f'final/images/PCA_pixels_PC12_features{balance}.jpeg')
-    written_files.append(f'final/images/PCA_pixels_PC12_features{balance}.webp')
-
+    written_files.extend(written_files_pca_pixels)
 
     #### PCA of the road stats
     # With separation of the bands
@@ -591,91 +640,12 @@ if __name__ == "__main__":
         roads_stats_filtered_subset.reset_index(drop=True, inplace=True)
         features = ['min', 'max', 'mean', 'std','median']
 
-        # Separating out the features
-        x = roads_stats_filtered_subset.loc[:, features].values
+        to_describe='road_type'
 
-        # Separating out the target
-        y = roads_stats_filtered_subset.loc[:,['road_type']].values
+        written_files_pca_stats=calculate_pca(roads_stats_filtered_subset, features, to_describe, dirpath_tables, dirpath_images, 
+                f'PCA_stats_band_{band}_values{balance}.csv', f'PCA_stats_band_{band}_PC_to_keep_evplot{balance}.jpg',
+                'PCA_stats_PC1{pc}_'+f'band_{band}_individuals{balance}.jpg', 'PCA_stats_PC1{pc}_'+f'band_{band}_features{balance}.jpg')
 
-        # Standardizing the features
-        x = StandardScaler().fit_transform(x)
+        written_files.extend(written_files_pca_stats)
 
-        pca = PCA(n_components=len(features))
-
-        coor_PC = pca.fit_transform(x)
-
-        coor_PC_df = pd.DataFrame(data = coor_PC, columns = [f"PC{k}" for k in range(1,len(features)+1)])
-        results_PCA = pd.concat([coor_PC_df, roads_stats_filtered_subset[['road_type']]], axis = 1)
-
-        results_PCA.to_csv(os.path.join(FINAL_FOLDER, f'tables/PCA_stats{band}{balance}.csv'))
-        written_files.append(f'final/tables/PCA_stats{band}{balance}.csv')
-
-        eigenvalues=pca.explained_variance_
-        bsm, fig_pc_num = evplot(eigenvalues)
-
-        pc_to_keep, pc_to_plot = determine_pc_num(eigenvalues, bsm)
-
-        fig_pc_num.savefig(os.path.join(dirpath_images, f'PCA_stats{band}_PC_to_keep_evplot{balance}.jpg'))
-        written_files.append(f'final/images/PCA_stats{band}_PC_to_keep_evplot{balance}.jpg')
-
-        expl_var_ratio=[round(x*100,2) for x in pca.explained_variance_ratio_.tolist()]
-
-        labels_column=[f'Principal component {k+1} ({expl_var_ratio[k]}%)' for k in range(len(features))]
-
-        for pc in range(2,pc_to_plot+1):
-            fig = plt.figure(figsize = (8,8))
-
-            ax = fig.add_subplot(1,1,1) 
-            ax.set_xlabel(f'Principal Component 1 ({expl_var_ratio[0]}%)', fontsize = 15)
-            ax.set_ylabel(f'Principal Component {pc} ({expl_var_ratio[1]}%)', fontsize = 15)
-            ax.set_title('PCA for the road statistics on each band', fontsize = 20)
-
-            targets = roads_stats_filtered_subset['road_type'].unique().tolist()
-            colors = ['r', 'b']
-            for target, color in zip(targets,colors):
-                indicesToKeep = results_PCA['road_type'] == target
-                ax.scatter(results_PCA.loc[indicesToKeep, 'PC1']
-                        , results_PCA.loc[indicesToKeep, f'PC{pc}']
-                        , c = color
-                        , s = 50)
-            ax.legend(targets)
-            ax.set_aspect(1)
-            ax.grid()
-
-            fig.savefig(os.path.join(dirpath_images, f'PCA_stats{band}_PC1{pc}_individuals{balance}.jpg'))
-            written_files.append(f'final/images/PCA_stats{band}_PC1{pc}_individuals{balance}.jpg')
-
-            coor_PC=pd.DataFrame(coor_PC, columns=labels_column)
-
-            loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
-
-            # fig = px.scatter(coor_PC, x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)', color=results_PCA['road_type'])
-            fig = px.scatter(pd.DataFrame(columns=labels_column),x= f'Principal component 1 ({expl_var_ratio[0]}%)', y=f'Principal component {pc} ({expl_var_ratio[1]}%)')
-
-            for i, feature in enumerate(features):
-                fig.add_shape(
-                    type='line',
-                    x0=0, y0=0,
-                    x1=loadings[i, 0],
-                    y1=loadings[i, 1]
-                )
-
-                fig.add_annotation(
-                    x=loadings[i, 0],
-                    y=loadings[i, 1],
-                    ax=0, ay=0,
-                    xanchor="center",
-                    yanchor="bottom",
-                    text=feature,
-                )
-
-            fig.update_yaxes(
-            scaleanchor = "x",
-            scaleratio = 1,
-            )
-
-        fig.write_image(os.path.join(dirpath_images,f'PCA_stats{band}_PC1{pc}_features{balance}.jpeg'))
-        fig.write_image(os.path.join(dirpath_images,f'PCA_stats{band}_PC1{pc}_features{balance}.webp'))
-
-        written_files.append(f'final/images/PCA_stats{band}_PC1{pc}_features{balance}.jpeg')
-        written_files.append(f'final/images/PCA_stats{band}_PC1{pc}_features{balance}.webp')
+    print(f'Checkout the written files: {written_files}')

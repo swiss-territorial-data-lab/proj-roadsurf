@@ -1,9 +1,9 @@
 prepare_data.py:
   debug_mode: False
   tasks:
-    determine_roads_surfaces: False
+    determine_roads_surfaces: True
     determine_restricted_AOI: False
-    generate_tiles_info: True
+    generate_tiles_info: False
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -12,7 +12,7 @@ prepare_data.py:
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  zoom_level: 18  # keep between 17 and 20  
+  zoom_level: 17  # keep between 17 and 20  
 
 
 RS_images_to_S3.py:
@@ -57,11 +57,12 @@ generate_tilesets.py:
 
 statistical_analysis.py:
   debug_mode: False
-  correct_balance: False
+  use_zonal_stats: False
+  correct_balance: True
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
-      images: /obj_detector/all-images-256
+      images: /obj_detector/all-images
       roads: /shapefiles_gpkg/roads_polygons.shp
       tiles: /json/tiles_aoi.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
