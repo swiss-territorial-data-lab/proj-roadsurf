@@ -56,7 +56,13 @@ else:
 # Define functions --------------------------------------------------------------------
 
 def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
-    # Make the difference of the geometry at row p2_idx with the one at the row p1_idx
+    '''
+    Make the difference of the geometry at row p2_idx with the one at the row p1_idx
+    
+    - dataset of polygons
+    - index of the "obstacle" polygon in the dataset
+    - index of the final polygon
+    '''
     
     # Store intermediary results back to poly
     diff=polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']
@@ -76,6 +82,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
                 print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
                 # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
                 # maintaining the orginal id to trace the roads back at the end.
+                # Or to only have multipolygons to pass the function gpd.overlay
 
     return polygons
 
@@ -100,9 +107,11 @@ if DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI:
     roads_parameters.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
 
     joined_roads=roads.merge(roads_parameters[['GDB-Code','Width']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
-    joined_roads_in_aoi=joined_roads.overlay(aoi[['TILEKEY','geometry']], how='intersection')
+    joined_uncovered_roads=joined_roads[joined_roads['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
 
-    joined_roads_in_aoi=joined_roads_in_aoi[joined_roads_in_aoi['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
+    aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=2056)
+    misc_fct.test_crs(joined_uncovered_roads, aoi_geom)
+    joined_roads_in_aoi=joined_uncovered_roads.overlay(aoi_geom, how='intersection')
 
     if DEBUG_MODE:
         joined_roads_in_aoi=joined_roads_in_aoi[1:100]

@@ -7,8 +7,8 @@ import requests
 import logging
 import logging.config
 
-logging.config.fileConfig('03_Scripts/logging.conf')
-logger = logging.getLogger('XYZ')
+# logging.config.fileConfig('03_Scripts/logging.conf')
+# logger = logging.getLogger('XYZ')
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -22,7 +22,8 @@ try:
     except:
         from misc import reformat_xyz, image_metadata_to_world_file, bounds_to_bbox
 except Exception as e:
-    logger.error(f"Could not import some dependencies. Exception: {e}")
+    # logger.error(f"Could not import some dependencies. Exception: {e}")
+    print(f"Could not import some dependencies. Exception: {e}")
     sys.exit(1)
 
 
@@ -113,7 +114,8 @@ def get_geotiff(XYZ_url, bbox, xyz, filename, save_metadata=False, overwrite=Tru
             gdal.Translate(geotiff_filename, src_ds, options=f'-of GTiff -a_srs EPSG:3857')
             src_ds = None
         except Exception as e:
-            logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            # logger.warning(f"Exception in the 'get_geotiff' function: {e}")
+            print(f"Exception in the 'get_geotiff' function: {e}")
 
         os.remove(img_filename)
         os.remove(wld_filename)
