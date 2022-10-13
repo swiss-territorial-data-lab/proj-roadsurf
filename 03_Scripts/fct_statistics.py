@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import plotly.express as px
 
-
+from fct_misc import ensure_dir_exists
 
 
 def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataFrame(), **kwargs):
@@ -96,9 +96,9 @@ def get_df_stats(dataframe, col, results_dict = None, to_df = False):
 def evplot(ev):
     '''
     Implementation of Kaiser's rule and the Broken stick model (MacArthur, 1957) to determine the number of components to keep in the PCA.
-    https://www.mohanwugupta.com/post/broken_stick/ -> adapted for Python
+    cf. https://www.mohanwugupta.com/post/broken_stick/ -> adapted for Python
 
-    - ev: eigenvalues
+    - ev: eigenvalues of the PCA
     '''
 
     n=len(ev)
@@ -133,6 +133,9 @@ def evplot(ev):
 def determine_pc_num(ev, bsm):
     '''
     Determine the number of pc to keep
+
+    - ev: eigenvalues of the PCA
+    - bsm: broken stick model as given by the function evplot
     '''
 
     pc_to_keep_kaiser=len([x for x in ev if x>sum(ev)/len(ev)])
@@ -153,13 +156,12 @@ def determine_pc_num(ev, bsm):
         pc_to_plot=pc_to_keep
         print(f'The number of components to keep and plot is {pc_to_keep}.')
 
-    return pc_to_keep, pc_to_plot
+    return pc_to_plot
         
 
 def calculate_pca(dataset, features, to_describe,
                 dirpath_tables='tables',  dirpath_images='images',
-                file_pca_values='PCA_values.csv', file_pc_to_keep='PC_to_keep_evplot.jpg',
-                file_graph_ind='PCA_PC1{pc}_individuals.jpg', file_graph_feat='PCA_PC1{pc}_features.jpeg',
+                file_prefix='PCA_',
                 title_graph = 'PCA'):
     '''
     Calculate a PCA, determine the number of components to keep, plot the individuals and the variables along those components. The results as saved
@@ -170,14 +172,17 @@ def calculate_pca(dataset, features, to_describe,
     - to_describe: explenatory variables or the variables to describe with the PCA (FOR NOW, ONLY ONE EXPLENATORY VARIALBE CAN BE PASSED)
     - dirpath_tables: direcory for the tables
     - dirpath_images: directory for the images
-    - file_pca_values: csv file where the coordoniates of the individuals after the PCA are saved
-    - file_pc_to_keep: image file where the graphs for the determination of the number of principal components to keep are saved
-    - file_graph_ind: image file where the graph for the individuals is saved
-    - file_graph_feat: image file where the graph for the features is saveds
+    - file_prefix: prefix for the names of the files that will be created
     - title_graph: string with the title for the graphs (the same for all)
     '''
 
     written_files=[]
+    ensure_dir_exists(dirpath_tables)
+    ensure_dir_exists(dirpath_images)
+    label_pc = [f'PC{x}' for x in range(1, len(features)+1)]
+
+    if file_prefix[-1]!='_':
+            file_prefix=file_prefix + '_'
 
     # 1. Define the variables and scale
     dataset.reset_index(drop=True, inplace=True)
@@ -187,32 +192,43 @@ def calculate_pca(dataset, features, to_describe,
     x = StandardScaler().fit_transform(x)
 
     # 2. Calculate the PCA
-    pca = PCA(n_components=len(features))
+    pca = PCA(n_components = len(features))
 
     coor_PC = pca.fit_transform(x)
 
-    coor_PC_df = pd.DataFrame(data = coor_PC, columns = [f"PC{k}" for k in range(1,len(features)+1)])
+    coor_PC_df = pd.DataFrame(data = coor_PC, columns = label_pc)
     results_PCA = pd.concat([coor_PC_df, dataset[to_describe]], axis = 1)
 
-    results_PCA.round(3).to_csv(os.path.join(dirpath_tables, file_pca_values), index=False)
-    written_files.append(file_pca_values)
-
+    results_PCA.round(3).to_csv(os.path.join(dirpath_tables, file_prefix + 'values.csv'), index=False)
+    written_files.append(file_prefix + 'values.csv')
 
     # 3. Get the number of components to keep
     eigenvalues=pca.explained_variance_
     bsm, fig_pc_num = evplot(eigenvalues)
 
-    pc_to_keep, pc_to_plot = determine_pc_num(eigenvalues, bsm)
+    pc_to_plot = determine_pc_num(eigenvalues, bsm)
 
-    fig_pc_num.savefig(os.path.join(dirpath_images, file_pc_to_keep), bbox_inches='tight')
-    written_files.append(file_pc_to_keep)
+    fig_pc_num.savefig(os.path.join(dirpath_images, file_prefix + 'PC_to_keep_evplot.jpg'), bbox_inches='tight')
+    written_files.append(file_prefix + 'PC_to_keep_evplot.jpg')
 
+    # 3 bis. Get feature correlation and covariance
+    # cf. https://scentellegher.github.io/machine-learning/2020/01/27/pca-loadings-sklearn.html
+    loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+
+    loading_matrix = pd.DataFrame(np.round(loadings, 2), columns = label_pc, index=features)
+    loading_matrix.to_csv(os.path.join(dirpath_tables, file_prefix + 'loading_matrix.csv'))
+
+    # cf. https://stackoverflow.com/questions/22984335/recovering-features-names-of-explained-variance-ratio-in-pca-with-sklearn
+    corr=pd.DataFrame(np.round(np.transpose(pca.components_), 2), columns = label_pc, index = features)
+    corr.to_csv(os.path.join(dirpath_tables, file_prefix + 'corr_matrix.csv'))
 
     # 4. Plot the graph of the individuals
     expl_var_ratio=[round(x*100,2) for x in pca.explained_variance_ratio_.tolist()]
 
+    targets = dataset[to_describe].unique().tolist()
+    colors=[key[4:] for key in mcolors.TABLEAU_COLORS.keys()][len(targets)]
+
     for pc in range(2,pc_to_plot+1):
-        locals={'pc': pc}
         fig = plt.figure(figsize = (8,8))
 
         ax = fig.add_subplot(1,1,1) 
@@ -220,8 +236,6 @@ def calculate_pca(dataset, features, to_describe,
         ax.set_ylabel(f'Principal Component {pc} ({expl_var_ratio[1]}%)', fontsize = 15)
         ax.set_title(title_graph, fontsize = 20)
 
-        targets = dataset[to_describe].unique().tolist()
-        colors=[key[4:] for key in mcolors.TABLEAU_COLORS.keys()][pc_to_plot]
         for target, color in zip(targets, colors):
             indicesToKeep = results_PCA['road_type'] == target
             ax.scatter(results_PCA.loc[indicesToKeep, 'PC1']
@@ -232,8 +246,8 @@ def calculate_pca(dataset, features, to_describe,
         ax.set_aspect(1)
         ax.grid()
 
-        fig.savefig(os.path.join(dirpath_images, eval(f'f"{file_graph_ind}"', locals)), bbox_inches='tight')
-        written_files.append(eval(f'f"{file_graph_ind}"', locals))
+        fig.savefig(os.path.join(dirpath_images, file_prefix + f'PC1{pc}_individuals.jpg'), bbox_inches='tight')
+        written_files.append(file_prefix + f'PC1{pc}_individuals.jpg')
 
         # 5. Plot the graph of the variables
         labels_column=[f'Principal component {k+1} ({expl_var_ratio[k]}%)' for k in range(len(features))]
@@ -272,11 +286,15 @@ def calculate_pca(dataset, features, to_describe,
             margin=dict(l=20, r=10, t=40, b=10),
         )
 
-        fig.write_image(os.path.join(dirpath_images, eval(f'f"{file_graph_feat}"', locals)))
-        file_graph_feat_webp=file_graph_feat.replace('jpeg','webp')
-        fig.write_image(os.path.join(dirpath_images, eval(f'f"{file_graph_feat_webp}"', locals)))
+        file_graph_feat = file_prefix + f'PC1{pc}_features.jpeg'
+        fig.write_image(os.path.join(dirpath_images, file_graph_feat))
+        
+        file_graph_feat_webp = file_graph_feat.replace('jpeg','webp')
+        fig.write_image(os.path.join(dirpath_images, file_graph_feat_webp))
 
-        written_files.append( eval(f'f"{file_graph_feat}"', locals))
-        written_files.append( eval(f'f"{file_graph_feat_webp}"', locals))
+        written_files.append(file_graph_feat)
+        written_files.append(file_graph_feat_webp)
 
     return written_files
+    
+   

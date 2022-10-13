@@ -27,7 +27,7 @@ DEBUG_MODE=cfg['debug_mode']
 USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
 BANDS=range(1,5)
-COUNT_THRESHOLD = 50
+COUNT_THRESHOLD = cfg['param']['threshold']
 
 PROCESSED=cfg['processed']
 PROCESSED_FOLDER=PROCESSED['processed_folder']
@@ -292,7 +292,7 @@ if __name__ == "__main__":
         pixels_per_band=pd.concat([artificial_pixels_subset, natural_pixels], ignore_index=True)
         roads_stats_filtered=pd.concat([artificial_stats_subset,natural_stats], ignore_index=True)
 
-        balance='_balanced'
+        balance='balanced_'
 
     else:
         balance=''
@@ -321,8 +321,8 @@ if __name__ == "__main__":
     ### Boxplots of the pixel value
     bp_pixel_bands=pixels_per_band.plot.box(by='road_type', title=f'Repartition of the values for the pixels', figsize=(10,8), grid=True)
     fig = bp_pixel_bands[0].get_figure()
-    fig.savefig(os.path.join(dirpath_images, f'boxplot_pixel_in_bands{balance}.jpg'))
-    written_files.append(f'final/images/boxplot_pixel_in_bands{balance}.jpg')
+    fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_pixel_in_bands.jpg'))
+    written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
 
 
     ### Boxplots of the statistics
@@ -331,8 +331,8 @@ if __name__ == "__main__":
         roads_stats_plot=roads_stats_subset.plot.box(by='road_type', figsize=(30,8), title=f'Boxplot of the statistics for the band {band}', grid=True)
 
         fig = roads_stats_plot[0].get_figure()
-        fig.savefig(os.path.join(dirpath_images, f'boxplot_stats_band_{band}{balance}.jpg'))
-        written_files.append(f'final/images/boxplot_stats_band_{band}{balance}.jpg') 
+        fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_stats_band_{band}.jpg'))
+        written_files.append(f'final/images/{balance}boxplot_stats_band_{band}.jpg') 
 
     
 
@@ -347,16 +347,17 @@ if __name__ == "__main__":
 
     dirpath_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
 
-    written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe, dirpath_tables, dirpath_images, 
-                f'PCA_pixel_values{balance}.csv', f'PCA_pixels_PC_to_keep_evplot{balance}.jpg',
-                'PCA_pixels_PC1{pc}_'+f'individuals{balance}.jpg', 'PCA_pixels_PC1{pc}_'+f'features{balance}.jpg',
-                'PCA for the values of the pixels on each band')
+    written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe,
+                dirpath_tables, dirpath_images, 
+                file_prefix=f'{balance}PCA_pixels_',
+                title_graph='PCA for the values of the pixels on each band')
 
     written_files.extend(written_files_pca_pixels)
 
     #### PCA of the road stats
     # With separation of the bands
     print('-- PCA of the road stats (with separation of the bands...')
+
     for band in tqdm(BANDS_STR, desc='Processing bands'):
         roads_stats_filtered_subset=roads_stats_filtered[roads_stats_filtered['band']==band]
 
@@ -365,10 +366,10 @@ if __name__ == "__main__":
 
         to_describe='road_type'
 
-        written_files_pca_stats=fs.calculate_pca(roads_stats_filtered_subset, features, to_describe, dirpath_tables, dirpath_images, 
-                f'PCA_stats_band_{band}_values{balance}.csv', f'PCA_stats_band_{band}_PC_to_keep_evplot{balance}.jpg',
-                'PCA_stats_PC1{pc}_'+f'band_{band}_individuals{balance}.jpg', 'PCA_stats_PC1{pc}_'+f'band_{band}_features{balance}.jpg',
-                f'PCA of the statistics of the roads on the {band} band')
+        written_files_pca_stats=fs.calculate_pca(roads_stats_filtered_subset, features, to_describe,
+                dirpath_tables, dirpath_images, 
+                file_prefix=f'{balance}PCA_stats_band_{band}_',
+                title_graph=f'PCA of the statistics of the roads on the {band} band')
 
         written_files.extend(written_files_pca_stats)
 
