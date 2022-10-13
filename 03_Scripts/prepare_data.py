@@ -3,18 +3,14 @@ import re
 
 import geopandas as gpd
 import pandas as pd
-import rasterio as rio
 import morecantile
-import pyproj
 
-import requests
-import lxml
 import os, sys
 import argparse
 from tqdm import tqdm
 import yaml
 
-import misc_fct
+import fct_misc
 
 
 # Get the configuration
@@ -82,7 +78,9 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
                 print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
                 # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
                 # maintaining the orginal id to trace the roads back at the end.
+                # Or add .1, .2 ect. to the original 1 
                 # Or to only have multipolygons to pass the function gpd.overlay
+                # Or add id based on geometry
 
     return polygons
 
@@ -110,7 +108,7 @@ if DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI:
     joined_uncovered_roads=joined_roads[joined_roads['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
 
     aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=2056)
-    misc_fct.test_crs(joined_uncovered_roads, aoi_geom)
+    fct_misc.test_crs(joined_uncovered_roads.crs, aoi_geom.crs)
     joined_roads_in_aoi=joined_uncovered_roads.overlay(aoi_geom, how='intersection')
 
     if DEBUG_MODE:
@@ -234,9 +232,9 @@ if DETERMINE_ROAD_SURFACES:
     # Exclude the roads potentially under forest canopy
     print('-- Excluding roads under forest canopy ...')
 
-    misc_fct.test_crs(corr_overlap2.crs, forests.crs)
+    fct_misc.test_crs(corr_overlap2.crs, forests.crs)
 
-    forests['buffered_geom']=forests.buffer(1)
+    forests['buffered_geom']=forests.buffer(3)
     forests.drop(columns=['geometry'], inplace=True)
     forests.rename(columns={'buffered_geom':'geometry'}, inplace=True)
 
@@ -266,7 +264,7 @@ if DETERMINE_RESTRICTED_AOI:
     geom={'geometry':[x for x in AOI_roads.geoms]}
     AOI_roads_no_forest=gpd.GeoDataFrame(geom, crs=roads.crs)
 
-    misc_fct.test_crs(AOI_roads_no_forest.crs, forests.crs)
+    fct_misc.test_crs(AOI_roads_no_forest.crs, forests.crs)
         
     AOI_roads_no_forest=AOI_roads_no_forest.overlay(forests[['UUID','geometry']],how='difference')
 
@@ -292,13 +290,13 @@ if GENERATE_TILES_INFO:
     AOI_roads_no_forest_3857.rename(columns={'FID': 'id_aoi'},inplace=True)
 
     print('-- Checking for intersections with the restricted area of interest...')
-    misc_fct.test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
+    fct_misc.test_crs(tms.crs, AOI_roads_no_forest_3857.crs)
 
     tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf, AOI_roads_no_forest_3857, how='inner')
 
     print('-- Setting a formatted id...')
     tiles_in_restricted_aoi.drop_duplicates('geometry', inplace=True)
-    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right', 'id_aoi'], inplace=True)
+    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
 
     xyz=[]
@@ -314,8 +312,8 @@ print('Saving files...')
 
 written_files=[]
 
-path_shp_gpkg=misc_fct.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
-path_json=misc_fct.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
+path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
+path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
 
 if DETERMINE_ROAD_SURFACES:
     non_forest_roads.to_file(os.path.join(path_shp_gpkg, 'roads_polygons.shp'))
