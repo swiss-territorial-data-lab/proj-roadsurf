@@ -56,9 +56,9 @@ generate_tilesets.py:
 
 
 statistical_analysis.py:
-  debug_mode: False
-  use_zonal_stats: False
-  correct_balance: True
+  debug_mode: false
+  use_zonal_stats: true
+  correct_balance: false
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
