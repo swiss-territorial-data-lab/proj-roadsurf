@@ -26,7 +26,9 @@ with open('03_Scripts/config.yaml') as fp:
 DEBUG_MODE=cfg['debug_mode']
 USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
+
 BANDS=range(1,5)
+MAX_CONFIDANCE_INT=cfg['param']['max_confidance']
 COUNT_THRESHOLD = cfg['param']['threshold']
 
 PROCESSED=cfg['processed']
@@ -49,16 +51,16 @@ if __name__ == "__main__":
 
     # Data treatment
     if DEBUG_MODE:
-        tiles_info=tiles_info[1:1000]
-        print('Debug mode activated: only 1000 tiles will be processed.')
+        tiles_info=tiles_info[1:500]
+        print('Debug mode activated: only 500 tiles will be processed.')
     
     if roads[roads.is_valid==False].shape[0]!=0:
        print(f"There are {roads[roads.is_valid==False].shape[0]} invalid geometries for the roads.")
        sys.exit(1)          
 
-    simplified_roads=roads.drop(columns=['ERSTELLUNG', 'ERSTELLU_1', 'HERKUNFT', 'HERKUNFT_J', 'HERKUNFT_M','KUNSTBAUTE', 'WANDERWEGE',
-                'VERKEHRSBE', 'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG', 'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME', 'TLM_STRASS',
-                'STRASSENNA', 'SHAPE_Leng', 'Width'])
+    simplified_roads=roads.drop(columns=['ERSTELLUNG', 'ERSTELLU_1', 'HERKUNFT', 'HERKUNFT_J', 'HERKUNFT_M',
+                'KUNSTBAUTE', 'WANDERWEGE', 'VERKEHRSBE', 'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG',
+                'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME', 'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng', 'Width'])
 
     roads_reproj=simplified_roads.to_crs(epsg=3857)
     tiles_info_reproj=tiles_info.to_crs(epsg=3857)
@@ -118,7 +120,8 @@ if __name__ == "__main__":
 
                 for band_num in BANDS:
 
-                    stats=zonal_stats(road, im_path, stats=['min', 'max', 'mean', 'median','std','count'], band=band_num, nodata=0)
+                    stats=zonal_stats(road, im_path, stats=['min', 'max', 'mean', 'median','std','count'], 
+                                        band=band_num, nodata=0)
                     stats_dict=stats[0]
                     stats_dict['band']=band_num
                     stats_dict['road_id']=road.loc[road_idx,'OBJECTID']
@@ -130,7 +133,7 @@ if __name__ == "__main__":
 
     else:
         roads_stats={'band':[], 'road_id': [], 'road_type': [], 'geometry': [],
-                    'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'count':[]}
+                    'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'count':[], 'confidance': []}
 
         for road_idx in tqdm(corrected_roads.index, desc='Extracting road statistics'):
 
@@ -159,7 +162,8 @@ if __name__ == "__main__":
                 # Get the name of the tiles
                 im_path = intersected_tiles.loc[tile_idx,'filepath']
                 
-                pixel_values, no_data = fs.get_pixel_values(road, im_path, BANDS, pixel_values, road_id=objectid, road_cover=cover_type)
+                pixel_values, no_data = fs.get_pixel_values(road, im_path, BANDS, pixel_values,
+                                                            road_id=objectid, road_cover=cover_type)
 
             if pixel_values.empty:
                 continue
@@ -179,8 +183,20 @@ if __name__ == "__main__":
 
         roads_stats=pd.DataFrame(roads_stats)
 
+    large_conf_int=roads_stats[roads_stats['confidance'] > MAX_CONFIDANCE_INT]
+    if not large_conf_int.empty:
+        print(f'There are {large_conf_int.shape[0]} roads with a confidance interval larger than {MAX_CONFIDANCE_INT} of pixel value')
+
+    if not roads_stats[roads_stats['std'] == 0].empty:
+        roads_stats_corr = roads_stats[roads_stats['std'] != 0].copy()
+        print(f'''{roads_stats.shape[0]-roads_stats_corr.shape[0]} road(s) was/were dropped, because of a standard deviation of 0.
+                OBJECTID: {roads_stats.loc[roads_stats['std'] == 0, "road_id"].values.tolist()}''')
+
+        roads_stats=roads_stats_corr.copy()
+
     roads_stats['mean']=roads_stats['mean'].round(2)
     roads_stats['std']=roads_stats['std'].round(2)
+    roads_stats['confidance']=roads_stats['confidance'].round(2)
 
     roads_stats_gdf=gpd.GeoDataFrame(roads_stats)
 
@@ -196,10 +212,12 @@ if __name__ == "__main__":
     roads_stats_df.to_csv(os.path.join(dirpath, 'stats_roads.csv'), index=False)
     written_files.append('processed/tables/stats_roads.csv')
 
-    roads_stats_filtered=roads_stats_df[roads_stats_df['count']>COUNT_THRESHOLD]
+    roads_stats_filtered=roads_stats_df[(roads_stats_df['count'] > COUNT_THRESHOLD) 
+                                        & (roads_stats_df['confidance'] < MAX_CONFIDANCE_INT)]
 
-    print(f"{roads_stats_df.shape[0]-roads_stats_filtered.shape[0]} roads on {roads_stats_df.shape[0]} were dropped because they contained less than {COUNT_THRESHOLD} pixels.")
-
+    print(f'{roads_stats_df.shape[0]-roads_stats_filtered.shape[0]} roads on {roads_stats_df.shape[0]}'+
+            f' were dropped because they contained less than {COUNT_THRESHOLD} pixels or their confidance'+
+            f' interval was higher than {MAX_CONFIDANCE_INT}.')
 
 
     ## Determination of the statistics for the pixels by type
@@ -228,11 +246,14 @@ if __name__ == "__main__":
 
         for band in BANDS:
 
-            pixels_list=pixel_values.loc[(pixel_values['road_type']==cover_type) & (pixel_values['band_num']==band),['pix_val']]['pix_val'].to_list()
+            pixels_list=pixel_values.loc[(pixel_values['road_type']==cover_type) & (pixel_values['band_num']==band),
+                ['pix_val']]['pix_val'].to_list()
+
             pixels_per_band[f'band{band}'].extend(pixels_list)
 
         # Following part to change. Probably, better handling of the no data would avoid this mistake
-        max_pixels=max(len(pixels_per_band['band1']), len(pixels_per_band['band2']), len(pixels_per_band['band3']), len(pixels_per_band['band4']))
+        max_pixels=max(len(pixels_per_band['band1']), len(pixels_per_band['band2']), 
+                        len(pixels_per_band['band3']), len(pixels_per_band['band4']))
 
         for band in BANDS:
             len_pixels_serie=len(pixels_per_band[f'band{band}'])
@@ -242,17 +263,28 @@ if __name__ == "__main__":
                 fill=[no_data]*max_pixels
                 pixels_per_band[f'band{band}'].extend(fill[len_pixels_serie:])
 
-                print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}. There were replaced with the value used of no data ({no_data})')
+                print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}.' +
+                        f' There were replaced with the value used of no data ({no_data})')
 
 
         pixels_per_band['road_type'].extend([cover_type]*len(pixels_list))
 
     pixels_per_band=pd.DataFrame(pixels_per_band)
 
+    ### Get ratio between bands
+    names={'1/2': 'R/G', '1/3': 'R/B', '1/4': 'R/NIR', '2/3': 'G/B', '2/4': 'G/NIR', '3/4': 'B/NIR'}
+    bands_ratio=list(names.values())
+
+    for band in BANDS:
+        for sec_band in range(band+1, max(BANDS)+1):
+            pixels_per_band[names[f'{band}/{sec_band}']] = pixels_per_band[f'band{band}']/pixels_per_band[f'band{sec_band}']
+
 
     ### Calculate the statistics of the pixel by band and by type of road cover
 
-    cover_stats={'cover':[], 'band':[], 'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'iq25':[], 'iq75':[], 'count':[]}
+    cover_stats={'cover':[], 'band':[],
+                'min':[], 'max':[], 'mean':[], 'median':[], 'std':[],
+                'confidance': [], 'iq25':[], 'iq75':[], 'count':[]}
 
     for cover_type in pixel_values['road_type'].unique().tolist():
 
@@ -269,8 +301,15 @@ if __name__ == "__main__":
     cover_stats['max']=[int(x) for x in cover_stats['max']] # Otherwise, the values get transformed to x-256 when converted in dataframe
 
     cover_stats_df=pd.DataFrame(cover_stats)
+
+    large_conf_int=cover_stats_df[cover_stats_df['confidance'] > MAX_CONFIDANCE_INT]
+    if not large_conf_int.empty:
+        print(f'''There are {large_conf_int.shape[0]} roads with a confidance interval larger than 
+                {MAX_CONFIDANCE_INT} of pixel value''')
+
     cover_stats_df['mean']=cover_stats_df['mean'].round(1)
     cover_stats_df['std']=cover_stats_df['std'].round(1)
+    cover_stats_df['confidance']=cover_stats_df['confidance'].round(1)
 
     dirpath=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables') )
 
@@ -286,8 +325,10 @@ if __name__ == "__main__":
         artificial_pixels=pixels_per_band[pixels_per_band['road_type']==100].reset_index(drop=True)
         artificial_stats=roads_stats_filtered[roads_stats_filtered['road_type']==100].reset_index(drop=True)
 
-        artificial_pixels_subset=artificial_pixels.sample(frac=natural_pixels.shape[0]/artificial_pixels.shape[0], random_state=1)
-        artificial_stats_subset=artificial_stats.sample(frac=natural_stats.shape[0]/artificial_stats.shape[0], random_state=9)
+        artificial_pixels_subset=artificial_pixels.sample(frac=natural_pixels.shape[0]/artificial_pixels.shape[0],
+                                                        random_state=1)
+        artificial_stats_subset=artificial_stats.sample(frac=natural_stats.shape[0]/artificial_stats.shape[0],
+                                                        random_state=9)
 
         pixels_per_band=pd.concat([artificial_pixels_subset, natural_pixels], ignore_index=True)
         roads_stats_filtered=pd.concat([artificial_stats_subset,natural_stats], ignore_index=True)
@@ -298,12 +339,12 @@ if __name__ == "__main__":
         balance=''
 
     ## Change the format to reader-frienldy
-    BANDS_STR=['NIR','R','G','B']
+    BANDS_STR=['Red','Green','Blue','NIR']
     road_stats_read=roads_stats_filtered.copy()
     pixels_per_band_read=pixels_per_band.copy()
 
-    pixels_per_band_read.rename(columns={'band1': 'NIR', 'band2': 'Red', 'band3': 'Green', 'band4': 'Blue'}, inplace=True)
-    road_stats_read.loc[:, 'band']=roads_stats_filtered['band'].map({1: 'NIR', 2: 'R', 3: 'G', 4: 'B'})
+    pixels_per_band_read.rename(columns={'band1': 'Red', 'band2': 'Green', 'band3': 'Blue', 'band4': 'NIR'}, inplace=True)
+    road_stats_read.loc[:, 'band']=roads_stats_filtered['band'].map({1: 'Red', 2: 'Green', 3: 'Blue', 4: 'NIR'})
 
     pixels_per_band_read['road_type']=pixels_per_band['road_type'].map({100: 'artificial', 200: 'natural'})
     road_stats_read.loc[:, 'road_type']=roads_stats_filtered['road_type'].map({100: 'artificial', 200: 'natural'})
@@ -316,19 +357,34 @@ if __name__ == "__main__":
 
     dirpath_images=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
 
-    # The green bar in the boxplot is the median (cf. https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.plot.box.html)
+    # The green bar in the boxplot is the median
+    # (cf. https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.plot.box.html)
 
     ### Boxplots of the pixel value
-    bp_pixel_bands=pixels_per_band.plot.box(by='road_type', title=f'Repartition of the values for the pixels', figsize=(10,8), grid=True)
+    bp_pixel_bands=pixels_per_band[BANDS_STR + ['road_type']].plot.box(by='road_type',
+                                            title=f'Repartition of the values for the pixels',
+                                            figsize=(10,8),
+                                            grid=True)
     fig = bp_pixel_bands[0].get_figure()
     fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_pixel_in_bands.jpg'))
     written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
+
+    bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
+                                            title=f'Repartition of the values for the pixels',
+                                            figsize=(10,8),
+                                            grid=True)
+    fig = bp_pixel_bands[0].get_figure()
+    fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'))
+    written_files.append(f'final/images/{balance}boxplot_pixel_in_bands_ratio.jpg')
 
 
     ### Boxplots of the statistics
     for band in BANDS_STR:
         roads_stats_subset=roads_stats_filtered[roads_stats_filtered['band']==band].drop(columns=['count', 'band', 'road_id'])
-        roads_stats_plot=roads_stats_subset.plot.box(by='road_type', figsize=(30,8), title=f'Boxplot of the statistics for the band {band}', grid=True)
+        roads_stats_plot=roads_stats_subset.plot.box(by='road_type',
+                                                    title=f'Boxplot of the statistics for the band {band}',
+                                                    figsize=(30,8),
+                                                    grid=True)
 
         fig = roads_stats_plot[0].get_figure()
         fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_stats_band_{band}.jpg'))
@@ -342,7 +398,7 @@ if __name__ == "__main__":
     ### PCA of the pixel values
     print('-- PCA of the pixel values...')
 
-    features = ['NIR', 'Red', 'Green', 'Blue']
+    features = BANDS_STR + bands_ratio
     to_describe='road_type'
 
     dirpath_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
@@ -362,7 +418,7 @@ if __name__ == "__main__":
         roads_stats_filtered_subset=roads_stats_filtered[roads_stats_filtered['band']==band]
 
         roads_stats_filtered_subset.reset_index(drop=True, inplace=True)
-        features = ['min', 'max', 'mean', 'std','median']
+        features = ['min', 'max', 'mean', 'std', 'median']
 
         to_describe='road_type'
 

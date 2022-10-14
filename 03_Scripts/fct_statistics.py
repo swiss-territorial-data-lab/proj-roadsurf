@@ -76,7 +76,7 @@ def get_df_stats(dataframe, col, results_dict = None, to_df = False):
     '''
 
     if results_dict==None:
-        results_dict={'min': [], 'max': [], 'mean': [], 'median': [], 'std': [], 'count': []}
+        results_dict={'min': [], 'max': [], 'mean': [], 'median': [], 'std': [], 'count': [], 'confidance': []}
 
     results_dict['min'].append(dataframe[col].min())
     results_dict['max'].append(dataframe[col].max())
@@ -84,6 +84,10 @@ def get_df_stats(dataframe, col, results_dict = None, to_df = False):
     results_dict['median'].append(dataframe[col].median())
     results_dict['std'].append(dataframe[col].std())
     results_dict['count'].append(dataframe[col].count())
+
+    # Get the confidance interval for > 95%
+    Z = 2
+    results_dict['confidance'].append(Z * results_dict['std'][-1] / (results_dict['count'][-1]**(1/2)))
 
     if to_df:
         results_df=pd.DataFrame(results_dict)

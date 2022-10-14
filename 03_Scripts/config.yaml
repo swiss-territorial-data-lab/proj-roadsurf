@@ -56,8 +56,8 @@ generate_tilesets.py:
 
 
 statistical_analysis.py:
-  debug_mode: false
-  use_zonal_stats: true
+  debug_mode: true
+  use_zonal_stats: false
   correct_balance: false
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
@@ -67,4 +67,5 @@ statistical_analysis.py:
       tiles: /json/tiles_aoi.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
-    threshold: 50
+    threshold: 10
+    max_confidance: 12.75
