@@ -6,9 +6,10 @@ from tqdm import tqdm
 
 import pandas as pd
 import geopandas as gpd
+from shapely.geometry.multipolygon import MultiPolygon
 
 from rasterstats import zonal_stats
-from shapely.geometry.multipolygon import MultiPolygon
+from scipy.stats import kstest
 
 import numpy as np
 
@@ -21,6 +22,40 @@ with open('03_Scripts/config.yaml') as fp:
 
 # Definitions of the functions
 
+def im_of_hist_comp(band, roads, pixels_per_band, dirpath_f_images, prefix=''):
+    '''
+    Produce the comparison between the histogram of the pixels belonging to the road and all the pixels in its type of road cover.
+    Save an image
+
+    - band: band on which we are working
+    - roads: roads of interest as a dataframe
+    - pixels_per_band: dataframe with all the pixels
+    - dirpath_f_images: path of the directory to save the image
+    - prefix: string to insert in the file name after the indication that it contains an histogram
+    '''
+    written_files_fct=[]
+
+    for road_idx in roads.index:
+        objectid=roads.loc[road_idx, 'road_id']
+        cover=roads.loc[road_idx, 'road_type']
+        p_value=roads.loc[road_idx, f'ks_p_{band}']
+
+        road_pixels=pixels_per_band.loc[pixels_per_band['road_id'] == objectid, band]
+        all_pixels=pixels_per_band.loc[pixels_per_band['road_type'] == cover, band]
+
+        nbr_road_pixels=road_pixels.shape[0]
+
+        ks_graph=fs.compare_histograms(road_pixels, all_pixels,
+                                    label1='pixels of the road', label2=f'{cover} pixels',
+                                    graph_title=f'''Histogram of the distribution of the {nbr_road_pixels} pixels
+                                                    on the band {band} (p-value: {p_value})''',
+                                    axis_label='density of the pixels')
+
+        ks_graph.savefig(os.path.join(dirpath_f_images, f'Hist_{cover}_road_{int(objectid)}_band_{band}.jpeg'), bbox_inches='tight')
+        written_files_fct.append(f'final/images/Hist_{prefix}{cover}_road_{objectid}_band_{band}.jpeg')
+
+    return written_files_fct
+
 
 # Definition of the constants
 DEBUG_MODE=cfg['debug_mode']
@@ -28,8 +63,12 @@ USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
 
 BANDS=range(1,5)
-MAX_CONFIDANCE_INT=cfg['param']['max_confidance']
-COUNT_THRESHOLD = cfg['param']['threshold']
+MAX_CONFIDANCE_INT = cfg['param']['max_confidance']
+COUNT_THRESHOLD = cfg['param']['pixel_threshold']
+
+DO_KS_TEST = cfg['param']['do_ks_test']
+MAKE_BOXPLOTS = cfg['param']['make_boxplots']
+MAKE_PCA = cfg['param']['make_pca']
 
 PROCESSED=cfg['processed']
 PROCESSED_FOLDER=PROCESSED['processed_folder']
@@ -41,6 +80,8 @@ TILES_DIR=PROCESSED_FOLDER + PROCESSED['input_files']['images']
 TILES_INFO=PROCESSED_FOLDER + PROCESSED['input_files']['tiles']
 
 written_files=[]
+dirpath_f_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
+dirpath_f_images=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
 
 if __name__ == "__main__":
 
@@ -234,42 +275,55 @@ if __name__ == "__main__":
 
         for cover_type in roads_on_tile['BELAGSART'].unique().tolist():
 
-            road_shapes=roads_on_tile[roads_on_tile['BELAGSART']==cover_type]
+            roads_by_cover=roads_on_tile[roads_on_tile['BELAGSART']==cover_type]
 
-            pixel_values, no_data =fs.get_pixel_values(road_shapes, tile, BANDS, pixel_values, road_type=cover_type)
+            for road_idx in roads_by_cover['OBJECTID'].unique().tolist():
+
+                    road=roads_by_cover[roads_by_cover['OBJECTID'] == road_idx]
+
+                    pixel_values, no_data =fs.get_pixel_values(road, tile, BANDS, pixel_values,
+                                                            road_type = cover_type, road_id = road_idx)
 
 
     ### Create a new table with a column per band (just reformatting the table)
-    pixels_per_band={'road_type':[], 'band1':[], 'band2':[], 'band3':[], 'band4':[]}
+    pixels_per_band={'road_type':[], 'road_id':[], 'band1':[], 'band2':[], 'band3':[], 'band4':[]}
 
     for cover_type in pixel_values['road_type'].unique().tolist():
 
-        for band in BANDS:
+        pixels_by_cover=pixel_values[pixel_values['road_type']==cover_type]
 
-            pixels_list=pixel_values.loc[(pixel_values['road_type']==cover_type) & (pixel_values['band_num']==band),
-                ['pix_val']]['pix_val'].to_list()
+        for road_idx in tqdm(pixels_by_cover['road_id'].unique().tolist(), desc=f'Reformatting table for road cover {cover_type}'):
 
-            pixels_per_band[f'band{band}'].extend(pixels_list)
+            for band in BANDS:
 
-        # Following part to change. Probably, better handling of the no data would avoid this mistake
-        max_pixels=max(len(pixels_per_band['band1']), len(pixels_per_band['band2']), 
-                        len(pixels_per_band['band3']), len(pixels_per_band['band4']))
+                pixels_list=pixels_by_cover.loc[(pixels_by_cover['road_id']==road_idx) & (pixels_by_cover['band_num']==band),
+                    ['pix_val']]['pix_val'].to_list()
 
-        for band in BANDS:
-            len_pixels_serie=len(pixels_per_band[f'band{band}'])
+                pixels_per_band[f'band{band}'].extend(pixels_list)
 
-            if len_pixels_serie!=max_pixels:
+            # Following part to change. Probably, better handling of the no data would avoid this mistake
+            max_pixels=max(len(pixels_per_band['band1']), len(pixels_per_band['band2']), 
+                            len(pixels_per_band['band3']), len(pixels_per_band['band4']))
 
-                fill=[no_data]*max_pixels
-                pixels_per_band[f'band{band}'].extend(fill[len_pixels_serie:])
+            for band in BANDS:
+                len_pixels_serie=len(pixels_per_band[f'band{band}'])
 
-                print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}.' +
-                        f' There were replaced with the value used of no data ({no_data})')
+                if len_pixels_serie!=max_pixels:
+
+                    fill=[no_data]*max_pixels
+                    pixels_per_band[f'band{band}'].extend(fill[len_pixels_serie:])
+
+                    print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}.' +
+                            f' There were replaced with the value used of no data ({no_data})')
 
 
-        pixels_per_band['road_type'].extend([cover_type]*len(pixels_list))
+            pixels_per_band['road_id'].extend([road_idx]*(max_pixels-len(pixels_per_band['road_id'])))
+
+
+        pixels_per_band['road_type'].extend([cover_type]*(len(pixels_per_band['road_id'])-len(pixels_per_band['road_type'])))
 
     pixels_per_band=pd.DataFrame(pixels_per_band)
+
 
     ### Get ratio between bands
     names={'1/2': 'R/G', '1/3': 'R/B', '1/4': 'R/NIR', '2/3': 'G/B', '2/4': 'G/NIR', '3/4': 'B/NIR'}
@@ -339,12 +393,14 @@ if __name__ == "__main__":
         balance=''
 
     ## Change the format to reader-frienldy
-    BANDS_STR=['Red','Green','Blue','NIR']
+    print('Converting the tables to reader-friendly')
+
+    BANDS_STR=['red','green','blue','NIR']
     road_stats_read=roads_stats_filtered.copy()
     pixels_per_band_read=pixels_per_band.copy()
 
-    pixels_per_band_read.rename(columns={'band1': 'Red', 'band2': 'Green', 'band3': 'Blue', 'band4': 'NIR'}, inplace=True)
-    road_stats_read.loc[:, 'band']=roads_stats_filtered['band'].map({1: 'Red', 2: 'Green', 3: 'Blue', 4: 'NIR'})
+    pixels_per_band_read.rename(columns={'band1': 'red', 'band2': 'green', 'band3': 'blue', 'band4': 'NIR'}, inplace=True)
+    road_stats_read.loc[:, 'band']=roads_stats_filtered['band'].map({1: 'red', 2: 'green', 3: 'blue', 4: 'NIR'})
 
     pixels_per_band_read['road_type']=pixels_per_band['road_type'].map({100: 'artificial', 200: 'natural'})
     road_stats_read.loc[:, 'road_type']=roads_stats_filtered['road_type'].map({100: 'artificial', 200: 'natural'})
@@ -352,81 +408,137 @@ if __name__ == "__main__":
     roads_stats_filtered=road_stats_read.copy()
     pixels_per_band=pixels_per_band_read.copy()
 
-    ## Boxplots 
-    print('Calculating boxplots...')
+    ## Boxplots
+    if MAKE_BOXPLOTS:
 
-    dirpath_images=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
+        print('Calculating boxplots...')
 
-    # The green bar in the boxplot is the median
-    # (cf. https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.plot.box.html)
+        # The green bar in the boxplot is the median
+        # (cf. https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.plot.box.html)
 
-    ### Boxplots of the pixel value
-    bp_pixel_bands=pixels_per_band[BANDS_STR + ['road_type']].plot.box(by='road_type',
-                                            title=f'Repartition of the values for the pixels',
-                                            figsize=(10,8),
-                                            grid=True)
-    fig = bp_pixel_bands[0].get_figure()
-    fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_pixel_in_bands.jpg'))
-    written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
+        ### Boxplots of the pixel value
+        bp_pixel_bands=pixels_per_band[BANDS_STR + ['road_type']].plot.box(by='road_type',
+                                                title=f'Repartition of the values for the pixels',
+                                                figsize=(10,8),
+                                                grid=True)
+        fig = bp_pixel_bands[0].get_figure()
+        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands.jpg'))
+        written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
 
-    bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
-                                            title=f'Repartition of the values for the pixels',
-                                            figsize=(10,8),
-                                            grid=True)
-    fig = bp_pixel_bands[0].get_figure()
-    fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'))
-    written_files.append(f'final/images/{balance}boxplot_pixel_in_bands_ratio.jpg')
+        bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
+                                                title=f'Repartition of the values for the pixels',
+                                                figsize=(10,8),
+                                                grid=True)
+        fig = bp_pixel_bands[0].get_figure()
+        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'))
+        written_files.append(f'final/images/{balance}boxplot_pixel_in_bands_ratio.jpg')
 
 
-    ### Boxplots of the statistics
-    for band in BANDS_STR:
-        roads_stats_subset=roads_stats_filtered[roads_stats_filtered['band']==band].drop(columns=['count', 'band', 'road_id'])
-        roads_stats_plot=roads_stats_subset.plot.box(by='road_type',
-                                                    title=f'Boxplot of the statistics for the band {band}',
-                                                    figsize=(30,8),
-                                                    grid=True)
+        ### Boxplots of the statistics
+        for band in BANDS_STR:
+            roads_stats_subset=roads_stats_filtered[roads_stats_filtered['band']==band].drop(columns=['count', 'band', 'road_id'])
+            roads_stats_plot=roads_stats_subset.plot.box(by='road_type',
+                                                        title=f'Boxplot of the statistics for the band {band}',
+                                                        figsize=(30,8),
+                                                        grid=True)
 
-        fig = roads_stats_plot[0].get_figure()
-        fig.savefig(os.path.join(dirpath_images, f'{balance}boxplot_stats_band_{band}.jpg'))
-        written_files.append(f'final/images/{balance}boxplot_stats_band_{band}.jpg') 
+            fig = roads_stats_plot[0].get_figure()
+            fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_stats_band_{band}.jpg'))
+            written_files.append(f'final/images/{balance}boxplot_stats_band_{band}.jpg') 
 
-    
+        
+    ## Kolmogorov-Smirnov test
+    # Null-hypothesis (H_0): the two samples are drawn from the same distribution
+
+    # cf. https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kstest.html
+    # https://stats.stackexchange.com/questions/81497/how-similar-are-my-2-data-sets
+    # https://stats.stackexchange.com/questions/413358/how-to-test-statistics-for-the-similarity-or-dissimilarity-between-these-two-cur
+
+    if DO_KS_TEST:
+        print('Executing the Kolmogorov-Smirnov test...')
+
+        for band in BANDS_STR:
+            ks=[]
+            for road_idx in tqdm(roads_stats_filtered.index, desc=f'Comparing road pixels to distribution on band {band}'):
+                objectid=roads_stats_filtered.loc[road_idx, 'road_id']
+                cover=roads_stats_filtered.loc[road_idx, 'road_type']
+
+                general_values=pixels_per_band.loc[pixels_per_band['road_type']==cover, [band, 'road_id']]
+
+                road_values=general_values.loc[general_values['road_id']==objectid, band]
+
+                ks.append(kstest(road_values, general_values.loc[:,band]))
+
+            ks_p_value=[float('{:0.3e}'.format(float(str(ks[k]).split(',')[1].lstrip(' pvalue=').rstrip(')')))) for k in range(len(ks))]
+            roads_stats_filtered[f"ks_p_{band}"]=ks_p_value
+
+            ks_d_value=[round(float(str(ks[k]).split(',')[0].lstrip('KstestResult(statistic=')),3) for k in range(len(ks))]
+            roads_stats_filtered[f"ks_D_{band}"]=ks_d_value
+
+        roads_stats_filtered.to_csv(os.path.join(dirpath_f_tables, 'ks_test.csv'))
+
+        print('The null hypothesis is that the distribution for the pixels of a road is similar to'+
+                ' the one of all the pixels of a road type. It is rejected when p-value < 0.05')
+
+        dir_histograms=fct_misc.ensure_dir_exists(os.path.join(dirpath_f_images, 'histograms'))
+
+        for band in BANDS_STR:
+            
+            for cover in roads_stats_filtered['road_type'].unique().tolist():
+
+                ### Counting the results
+                all_roads=roads_stats_filtered[roads_stats_filtered["road_type"] == cover][f"ks_p_{band}"].count()
+                significant_roads=roads_stats_filtered[(roads_stats_filtered[f"ks_p_{band}"] > 0.05) & 
+                                                    (roads_stats_filtered['road_type'] == cover)][f"ks_p_{band}"].count()
+                print(f'There are {significant_roads} on {all_roads} roads with a p-value higher than 0.05'
+                        + f' on band {band} with a {cover} cover.')
+
+                ### Getting some example images
+                road_max_ks=roads_stats_filtered[roads_stats_filtered[f"ks_p_{band}"] > 
+                                                roads_stats_filtered[f"ks_p_{band}"].max()
+                                                -roads_stats_filtered[f"ks_p_{band}"].max()/100].reset_index(drop=True).head(5)
+                written_files.extend(im_of_hist_comp(band, road_max_ks, pixels_per_band, dir_histograms, 'high_'))
+
+                road_min_ks=roads_stats_filtered[roads_stats_filtered[f"ks_p_{band}"] <=
+                                                roads_stats_filtered[f"ks_p_{band}"].min()
+                                                +roads_stats_filtered[f"ks_p_{band}"].min()/100].reset_index(drop=True).head(5)
+                written_files.extend(im_of_hist_comp(band, road_min_ks, pixels_per_band, dir_histograms, 'low_'))
 
     ## PCA
-    print('Calculating PCAs...') 
+    if MAKE_PCA:
+        print('Calculating PCAs...') 
 
-    ### PCA of the pixel values
-    print('-- PCA of the pixel values...')
+        ### PCA of the pixel values
+        print('-- PCA of the pixel values...')
 
-    features = BANDS_STR + bands_ratio
-    to_describe='road_type'
-
-    dirpath_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
-
-    written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe,
-                dirpath_tables, dirpath_images, 
-                file_prefix=f'{balance}PCA_pixels_',
-                title_graph='PCA for the values of the pixels on each band')
-
-    written_files.extend(written_files_pca_pixels)
-
-    #### PCA of the road stats
-    # With separation of the bands
-    print('-- PCA of the road stats (with separation of the bands...')
-
-    for band in tqdm(BANDS_STR, desc='Processing bands'):
-        roads_stats_filtered_subset=roads_stats_filtered[roads_stats_filtered['band']==band]
-
-        roads_stats_filtered_subset.reset_index(drop=True, inplace=True)
-        features = ['min', 'max', 'mean', 'std', 'median']
-
+        features = BANDS_STR + bands_ratio
         to_describe='road_type'
 
-        written_files_pca_stats=fs.calculate_pca(roads_stats_filtered_subset, features, to_describe,
-                dirpath_tables, dirpath_images, 
-                file_prefix=f'{balance}PCA_stats_band_{band}_',
-                title_graph=f'PCA of the statistics of the roads on the {band} band')
+        written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe,
+                    dirpath_f_tables, dirpath_f_images, 
+                    file_prefix=f'{balance}PCA_pixels_',
+                    title_graph='PCA for the values of the pixels on each band')
 
-        written_files.extend(written_files_pca_stats)
+        written_files.extend(written_files_pca_pixels)
+
+        #### PCA of the road stats
+        # With separation of the bands
+        print('-- PCA of the road stats (with separation of the bands...')
+
+        for band in tqdm(BANDS_STR, desc='Processing bands'):
+            roads_stats_filtered_subset=roads_stats_filtered[roads_stats_filtered['band']==band]
+
+            roads_stats_filtered_subset.reset_index(drop=True, inplace=True)
+            features = ['min', 'max', 'mean', 'std', 'median']
+
+            to_describe='road_type'
+
+            written_files_pca_stats=fs.calculate_pca(roads_stats_filtered_subset, features, to_describe,
+                    dirpath_f_tables, dirpath_f_images, 
+                    file_prefix=f'{balance}PCA_stats_band_{band}_',
+                    title_graph=f'PCA of the statistics of the roads on the {band} band')
+
+            written_files.extend(written_files_pca_stats)
+
 
     print(f'Checkout the written files: {written_files}')

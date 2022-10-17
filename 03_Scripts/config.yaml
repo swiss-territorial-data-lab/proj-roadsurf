@@ -67,5 +67,8 @@ statistical_analysis.py:
       tiles: /json/tiles_aoi.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
-    threshold: 10
+    pixel_threshold: 10
     max_confidance: 12.75
+    do_ks_test: true
+    make_pca: false
+    make_boxplots: false

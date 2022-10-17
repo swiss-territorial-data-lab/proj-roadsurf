@@ -18,6 +18,32 @@ import plotly.express as px
 
 from fct_misc import ensure_dir_exists
 
+def compare_histograms(data1, data2, label1=None, label2=None, graph_title=None, axis_label=None):
+    '''
+    Make histogram of density for two dataset on the same plot.
+
+    - data1: 1st dataset as numpy array
+    - data2: 2nd dataset as numpy array
+    - label1: label for the 1st dataset
+    - label2: label for the 2nd dataset
+    - graph_title: title of the graph
+    - axis_label: label for the y axis
+    '''
+
+    bins = np.linspace(0, 255, 55)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    
+    ax.hist(data1, bins, alpha=0.5, label=label1, density=True)
+    ax.hist(data2, bins, alpha=0.5, label=label2, density=True)
+    ax.legend(loc='upper right')
+    ax.grid()
+
+    ax.set(title=graph_title, ylabel=axis_label)
+
+    return fig
+
 
 def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataFrame(), **kwargs):
     '''
