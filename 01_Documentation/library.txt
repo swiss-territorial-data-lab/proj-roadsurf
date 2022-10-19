@@ -9,4 +9,8 @@ request
 pygdal==3.0.4.11  # https://gis.stackexchange.com/a/124420
 Pillow
 OWSLib
-
+cogeo-mosaic
+plotly
+matplotlib
+scikit-learn
+kaleido

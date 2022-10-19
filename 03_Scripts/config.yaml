@@ -1,38 +1,43 @@
 prepare_data.py:
+  debug_mode: false
   tasks:
-    determine_roads_surfaces: False
-    determine_restricted_AOI: False
-    make_raster_mosaic: False
-    generate_tiles_json: True
+    determine_roads_surfaces: true
+    determine_restricted_AOI: false
+    generate_tiles_info: false
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
       roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
       roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
-      aoi: /initial/AOI/AOI_Prototyp_Belagsarten.shp
-  output:
-    output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-    output_files:
-      roads: /shapefiles_gpkg/non_forest_wide_roads.shp
-      restricted_AOI: /shapefiles_gpkg/restricted_AOI.shp
-      tiles_aoi:  /json/tiles_aoi.geojson
-      gpkg_tiles: /shapefiles_gpkg/epsg3857_tiles.gpkg
-  param_tiles:
-    zoom_level: 18
-      
-generate_training_sets.py:
-  debug_mode: True
+      aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  zoom_level: 17  # keep between 17 and 20  
+
+
+RS_images_to_S3.py:
+  access_key: ...
+  secret_key: ...
+  url: https://s3.pub1.infomaniak.cloud
+  datapath: D:\Export_RS\*
+  bucket: proj-roadsurf
+  outpath: 02_Data/initial/images_RS/
+
+
+generate_tilesets.py:
+  debug_mode: False
   datasets:
-    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles.geojson
-    ground_truth_labels_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/shapefiles/non_forest_wide_roads.shp
+    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi_z20.geojson
     orthophotos_web_service:
-      type: WMTS      # supported values: 1. MIL = Map Image Layer 2. WMS 3. WMTS
-      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles
-      layers: /data/mosaic.json
+      type: XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. XYZ
+      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&bidx=1&no_data=0&return_mask=false&pixel_selection=lowest
       srs: "EPSG:3857"
-      no_data: 0
-  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/
+      # parameters:
+      #   url: /data/mosaic_3857.json
+      #   no_data: 0
+      #   return_mask: false
+      #   pixel_selection: lowest
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/obj_detector
   tile_size: 256 # per side, in pixels
   overwrite: False
   n_jobs: 10
@@ -45,12 +50,25 @@ generate_training_sets.py:
     license:
       name: unknown
       url: https://www.swisstopo.admin.ch/fr/home/meta/conditions-generales/geodonnees/ogd.html
+    category:
+      name: 'road'
+      supercategory: 'facility'
 
-wmts-geoquery.py:
-  debug: True
-  url: https://wmts.geo.admin.ch/EPSG/2056/1.0.0/WMTSCapabilities.xml
-  layer: ch.swisstopo.swissimage-product
-  tiles: 02_Data/processed/json/tiles_aoi.geojson
-  width: 100000
-  time: '2018'
-  tmp: 02_Data/processed/images
+
+statistical_analysis.py:
+  debug_mode: false
+  use_zonal_stats: false
+  correct_balance: false
+  processed:
+    processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+    input_files:
+      images: /obj_detector/all-images
+      roads: /shapefiles_gpkg/roads_polygons.shp
+      tiles: /json/tiles_aoi_z17.geojson
+  final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+  param:
+    pixel_threshold: 10
+    max_confidance: 12.5
+    make_boxplots: true
+    do_ks_test: false
+    make_pca: true
