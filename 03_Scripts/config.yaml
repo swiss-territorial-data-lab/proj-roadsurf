@@ -1,9 +1,9 @@
 prepare_data.py:
-  debug_mode: False
+  debug_mode: false
   tasks:
-    determine_roads_surfaces: True
-    determine_restricted_AOI: True
-    generate_tiles_info: True
+    determine_roads_surfaces: true
+    determine_restricted_AOI: false
+    generate_tiles_info: false
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -27,7 +27,7 @@ RS_images_to_S3.py:
 generate_tilesets.py:
   debug_mode: False
   datasets:
-    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi.geojson
+    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi_z20.geojson
     orthophotos_web_service:
       type: XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. XYZ
       url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&bidx=1&no_data=0&return_mask=false&pixel_selection=lowest
@@ -56,7 +56,7 @@ generate_tilesets.py:
 
 
 statistical_analysis.py:
-  debug_mode: true
+  debug_mode: false
   use_zonal_stats: false
   correct_balance: false
   processed:
@@ -64,11 +64,11 @@ statistical_analysis.py:
     input_files:
       images: /obj_detector/all-images
       roads: /shapefiles_gpkg/roads_polygons.shp
-      tiles: /json/tiles_aoi.geojson
+      tiles: /json/tiles_aoi_z17.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
     pixel_threshold: 10
-    max_confidance: 12.75
-    do_ks_test: true
-    make_pca: false
-    make_boxplots: false
+    max_confidance: 12.5
+    make_boxplots: true
+    do_ks_test: false
+    make_pca: true
