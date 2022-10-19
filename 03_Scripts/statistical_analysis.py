@@ -185,14 +185,16 @@ if __name__ == "__main__":
                     roads_stats = pd.concat([roads_stats, pd.DataFrame(stats_dict,index=[0])],ignore_index=True)
 
     else:
-        roads_stats={'band':[], 'road_id': [], 'road_type': [], 'geometry': [],
+        roads_stats={'band':[], 'road_id': [], 'road_type': [], 'road_width': [], 'geometry': [],
                     'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'count':[], 'confidance': []}
 
+        pixel_values=pd.DataFrame()
         for road_idx in tqdm(corrected_roads.index, desc='Extracting road statistics'):
 
             # Get the characteristics of the road
             objectid=corrected_roads.loc[road_idx, 'OBJECTID']
             cover_type=corrected_roads.loc[road_idx, 'BELAGSART']
+            width=corrected_roads.loc[road_idx, 'road_width']
             road=corrected_roads.loc[corrected_roads['OBJECTID'] == objectid,['OBJECTID', 'BELAGSART', 'geometry']]
             road.reset_index(inplace=True, drop=True)
             geometry = road.loc[0,'geometry'] if road.shape[0]==1 else MultiPolygon([road.loc[k,'geometry'] for k in road.index])
@@ -207,7 +209,7 @@ if __name__ == "__main__":
             intersected_tiles.drop_duplicates(subset=['id'], inplace=True)
             intersected_tiles.reset_index(drop=True, inplace=True)
 
-            pixel_values=pd.DataFrame()
+            pixel_values_road=pd.DataFrame()
 
             # Get the pixels for each tile
             for tile_idx in intersected_tiles.index:
@@ -215,18 +217,22 @@ if __name__ == "__main__":
                 # Get the name of the tiles
                 im_path = intersected_tiles.loc[tile_idx,'filepath']
                 
-                pixel_values, no_data = fct_misc.get_pixel_values(road, im_path, BANDS, pixel_values,
-                                                            road_id=objectid, road_cover=cover_type)
+                pixel_values_road, no_data = fct_misc.get_pixel_values(road, im_path, BANDS, pixel_values_road,
+                                                            road_id=objectid, road_type=cover_type, road_width=width)
 
-            if pixel_values.empty:
+            if pixel_values_road.empty:
                 continue
 
+            pixel_values=pd.concat([pixel_values, pixel_values_road], ignore_index=True)
+
+            # Get the statistics for the road
             for band in BANDS:
-                pixels_subset=pixel_values[pixel_values['band_num']==band]
+                pixels_subset=pixel_values_road[pixel_values_road['band_num']==band]
 
                 roads_stats['band'].append(band)
                 roads_stats['road_id'].append(objectid)
                 roads_stats['road_type'].append(cover_type)
+                roads_stats['road_width'].append(width)
                 roads_stats['geometry'].append(geometry)
 
                 roads_stats=fs.get_df_stats(pixels_subset, 'pix_val', roads_stats)
@@ -274,30 +280,6 @@ if __name__ == "__main__":
 
 
     ## Determination of the statistics for the pixels by type
-
-    ### Create a table with the values of pixels on a road
-    # cf https://gis.stackexchange.com/questions/260304/extract-raster-values-within-shapefile-with-pygeoprocessing-or-gdal
-
-    pixel_values=pd.DataFrame()
-
-    for tile_idx in tqdm(tiles_info_reproj.index, desc='Getting pixel values'):
-
-        roads_on_tile=clipped_roads[clipped_roads['tile']==tiles_info_reproj.loc[tile_idx,'title']]
-        tile = tiles_info_reproj.loc[tile_idx,'filepath']
-
-        for cover_type in roads_on_tile['BELAGSART'].unique().tolist():
-
-            roads_by_cover=roads_on_tile[roads_on_tile['BELAGSART']==cover_type]
-
-            for road_idx in roads_by_cover['OBJECTID'].unique().tolist():
-
-                    road=roads_by_cover[roads_by_cover['OBJECTID'] == road_idx].reset_index(drop=True)
-
-                    width=road.loc[0, 'road_width']
-
-                    pixel_values, no_data =fct_misc.get_pixel_values(road, tile, BANDS, pixel_values,
-                                                            road_type = cover_type, road_id = road_idx, road_width = width)
-
 
     ### Create a new table with a column per band (just reformatting the table)
     pixels_per_band={'road_type':[], 'road_id':[], 'road_width': [], 'band1':[], 'band2':[], 'band3':[], 'band4':[]}
@@ -546,7 +528,7 @@ if __name__ == "__main__":
             roads_stats_filtered_subset=roads_stats_filtered[roads_stats_filtered['band']==band]
 
             roads_stats_filtered_subset.reset_index(drop=True, inplace=True)
-            features = ['min', 'max', 'mean', 'std', 'median']
+            features = ['min', 'max', 'mean', 'std', 'median', 'road_width']
 
             to_describe='road_type'
 

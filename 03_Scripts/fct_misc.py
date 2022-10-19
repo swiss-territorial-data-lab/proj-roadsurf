@@ -40,6 +40,7 @@ def ensure_dir_exists(dirpath):
 def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataFrame(), **kwargs):
     '''
     Extract the value of the raster pixels falling under the mask and save them in a dataframe.
+    cf https://gis.stackexchange.com/questions/260304/extract-raster-values-within-shapefile-with-pygeoprocessing-or-gdal
 
     - polygons: shapefile determining the zones where the pixels are extracted
     - tile: path to the raster image
