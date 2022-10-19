@@ -13,6 +13,8 @@ from scipy.stats import kstest
 
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 import fct_misc
 import fct_statistics as fs
 
@@ -48,11 +50,14 @@ def im_of_hist_comp(band, roads, pixels_per_band, dirpath_f_images, prefix=''):
         ks_graph=fs.compare_histograms(road_pixels, all_pixels,
                                     label1='pixels of the road', label2=f'{cover} pixels',
                                     graph_title=f'''Histogram of the distribution of the {nbr_road_pixels} pixels
-                                                    on the band {band} (p-value: {p_value})''',
+                                            on the {band} band (p-value: {p_value})''',
                                     axis_label='density of the pixels')
 
-        ks_graph.savefig(os.path.join(dirpath_f_images, f'Hist_{cover}_road_{int(objectid)}_band_{band}.jpeg'), bbox_inches='tight')
+        ks_graph.savefig(os.path.join(dirpath_f_images, f'Hist_{prefix}{cover}_road_{int(objectid)}_band_{band}.jpeg'), bbox_inches='tight')
+
         written_files_fct.append(f'final/images/Hist_{prefix}{cover}_road_{objectid}_band_{band}.jpeg')
+
+    plt.close('all')
 
     return written_files_fct
 
@@ -94,6 +99,13 @@ if __name__ == "__main__":
     if DEBUG_MODE:
         tiles_info=tiles_info[1:500]
         print('Debug mode activated: only 500 tiles will be processed.')
+
+    if False:
+        unsure_roads=gpd.read_file(os.path.join(PROCESSED_FOLDER, 'shapefiles_gpkg/test_natural_roads.shp'))
+        id_unsure_roads=unsure_roads['OBJECTID'].values.tolist()
+
+        roads=roads[~roads['OBJECTID'].isin(id_unsure_roads)]
+
     
     if roads[roads.is_valid==False].shape[0]!=0:
        print(f"There are {roads[roads.is_valid==False].shape[0]} invalid geometries for the roads.")
@@ -101,7 +113,7 @@ if __name__ == "__main__":
 
     simplified_roads=roads.drop(columns=['ERSTELLUNG', 'ERSTELLU_1', 'HERKUNFT', 'HERKUNFT_J', 'HERKUNFT_M',
                 'KUNSTBAUTE', 'WANDERWEGE', 'VERKEHRSBE', 'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG',
-                'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME', 'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng', 'Width'])
+                'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME', 'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng'])
 
     roads_reproj=simplified_roads.to_crs(epsg=3857)
     tiles_info_reproj=tiles_info.to_crs(epsg=3857)
@@ -203,7 +215,7 @@ if __name__ == "__main__":
                 # Get the name of the tiles
                 im_path = intersected_tiles.loc[tile_idx,'filepath']
                 
-                pixel_values, no_data = fs.get_pixel_values(road, im_path, BANDS, pixel_values,
+                pixel_values, no_data = fct_misc.get_pixel_values(road, im_path, BANDS, pixel_values,
                                                             road_id=objectid, road_cover=cover_type)
 
             if pixel_values.empty:
@@ -279,14 +291,16 @@ if __name__ == "__main__":
 
             for road_idx in roads_by_cover['OBJECTID'].unique().tolist():
 
-                    road=roads_by_cover[roads_by_cover['OBJECTID'] == road_idx]
+                    road=roads_by_cover[roads_by_cover['OBJECTID'] == road_idx].reset_index(drop=True)
 
-                    pixel_values, no_data =fs.get_pixel_values(road, tile, BANDS, pixel_values,
-                                                            road_type = cover_type, road_id = road_idx)
+                    width=road.loc[0, 'road_width']
+
+                    pixel_values, no_data =fct_misc.get_pixel_values(road, tile, BANDS, pixel_values,
+                                                            road_type = cover_type, road_id = road_idx, road_width = width)
 
 
     ### Create a new table with a column per band (just reformatting the table)
-    pixels_per_band={'road_type':[], 'road_id':[], 'band1':[], 'band2':[], 'band3':[], 'band4':[]}
+    pixels_per_band={'road_type':[], 'road_id':[], 'road_width': [], 'band1':[], 'band2':[], 'band3':[], 'band4':[]}
 
     for cover_type in pixel_values['road_type'].unique().tolist():
 
@@ -313,11 +327,14 @@ if __name__ == "__main__":
                     fill=[no_data]*max_pixels
                     pixels_per_band[f'band{band}'].extend(fill[len_pixels_serie:])
 
-                    print(f'{max_pixels-len_pixels_serie} pixels were missing on the band {band} for the road cover {cover_type}.' +
-                            f' There were replaced with the value used of no data ({no_data})')
+                    print(f'{max_pixels-len_pixels_serie} pixels was/were missing on the {band} band on the road' +
+                            f' {road_idx} (cover {cover_type}).' +
+                            f' There were replaced with the value used of no data ({no_data}).')
 
+            width=(pixels_by_cover.loc[pixels_by_cover['road_id'] == road_idx,'road_width']).values.tolist()[0]
 
             pixels_per_band['road_id'].extend([road_idx]*(max_pixels-len(pixels_per_band['road_id'])))
+            pixels_per_band['road_width'].extend([width]*(max_pixels-len(pixels_per_band['road_width'])))
 
 
         pixels_per_band['road_type'].extend([cover_type]*(len(pixels_per_band['road_id'])-len(pixels_per_band['road_type'])))
@@ -393,7 +410,7 @@ if __name__ == "__main__":
         balance=''
 
     ## Change the format to reader-frienldy
-    print('Converting the tables to reader-friendly')
+    print('Converting the tables to reader-friendly...')
 
     BANDS_STR=['red','green','blue','NIR']
     road_stats_read=roads_stats_filtered.copy()
@@ -422,7 +439,7 @@ if __name__ == "__main__":
                                                 figsize=(10,8),
                                                 grid=True)
         fig = bp_pixel_bands[0].get_figure()
-        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands.jpg'))
+        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands.jpg'), bbox_inches='tight')
         written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
 
         bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
@@ -430,7 +447,7 @@ if __name__ == "__main__":
                                                 figsize=(10,8),
                                                 grid=True)
         fig = bp_pixel_bands[0].get_figure()
-        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'))
+        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'), bbox_inches='tight')
         written_files.append(f'final/images/{balance}boxplot_pixel_in_bands_ratio.jpg')
 
 
@@ -438,21 +455,21 @@ if __name__ == "__main__":
         for band in BANDS_STR:
             roads_stats_subset=roads_stats_filtered[roads_stats_filtered['band']==band].drop(columns=['count', 'band', 'road_id'])
             roads_stats_plot=roads_stats_subset.plot.box(by='road_type',
-                                                        title=f'Boxplot of the statistics for the band {band}',
+                                                        title=f'Boxplot of the statistics for the {band} band',
                                                         figsize=(30,8),
                                                         grid=True)
 
             fig = roads_stats_plot[0].get_figure()
-            fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_stats_band_{band}.jpg'))
+            fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_stats_band_{band}.jpg'), bbox_inches='tight')
             written_files.append(f'final/images/{balance}boxplot_stats_band_{band}.jpg') 
 
         
     ## Kolmogorov-Smirnov test
     # Null-hypothesis (H_0): the two samples are drawn from the same distribution
 
-    # cf. https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kstest.html
     # https://stats.stackexchange.com/questions/81497/how-similar-are-my-2-data-sets
     # https://stats.stackexchange.com/questions/413358/how-to-test-statistics-for-the-similarity-or-dissimilarity-between-these-two-cur
+    # https://www.researchgate.net/post/Is-a-two-sample-Kolmogorov-Smirnov-Test-effective-in-case-of-imbalanced-data
 
     if DO_KS_TEST:
         print('Executing the Kolmogorov-Smirnov test...')
@@ -494,15 +511,15 @@ if __name__ == "__main__":
                         + f' on band {band} with a {cover} cover.')
 
                 ### Getting some example images
-                road_max_ks=roads_stats_filtered[roads_stats_filtered[f"ks_p_{band}"] > 
-                                                roads_stats_filtered[f"ks_p_{band}"].max()
-                                                -roads_stats_filtered[f"ks_p_{band}"].max()/100].reset_index(drop=True).head(5)
-                written_files.extend(im_of_hist_comp(band, road_max_ks, pixels_per_band, dir_histograms, 'high_'))
+                max_ks=roads_stats_filtered[f"ks_p_{band}"].max()
+                road_max_ks=roads_stats_filtered[(roads_stats_filtered[f"ks_p_{band}"] > max_ks-max_ks/100) &
+                                                (roads_stats_filtered['road_type'] == cover)].reset_index(drop=True).head(5)
+                written_files.extend(im_of_hist_comp(band, road_max_ks, pixels_per_band, dir_histograms, prefix='high_'))
 
-                road_min_ks=roads_stats_filtered[roads_stats_filtered[f"ks_p_{band}"] <=
-                                                roads_stats_filtered[f"ks_p_{band}"].min()
-                                                +roads_stats_filtered[f"ks_p_{band}"].min()/100].reset_index(drop=True).head(5)
-                written_files.extend(im_of_hist_comp(band, road_min_ks, pixels_per_band, dir_histograms, 'low_'))
+                min_ks=roads_stats_filtered[f"ks_p_{band}"].min()
+                road_min_ks=roads_stats_filtered[(roads_stats_filtered[f"ks_p_{band}"] <= min_ks+min_ks/100) & 
+                                                (roads_stats_filtered['road_type'] == cover)].reset_index(drop=True).head(5)
+                written_files.extend(im_of_hist_comp(band, road_min_ks, pixels_per_band, dir_histograms, prefix='low_'))
 
     ## PCA
     if MAKE_PCA:
@@ -511,7 +528,7 @@ if __name__ == "__main__":
         ### PCA of the pixel values
         print('-- PCA of the pixel values...')
 
-        features = BANDS_STR + bands_ratio
+        features = BANDS_STR + bands_ratio + ['road_width']
         to_describe='road_type'
 
         written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe,

@@ -241,7 +241,8 @@ if DETERMINE_ROAD_SURFACES:
     non_forest_roads=corr_overlap2.copy()
     non_forest_roads=non_forest_roads.overlay(forests[['UUID','geometry']],how='difference')
 
-    non_forest_roads.drop(columns=['UUID','GDB-Code'],inplace=True)
+    non_forest_roads.drop(columns=['UUID','GDB-Code','id'],inplace=True)
+    non_forest_roads.rename(columns={'Width':'road_width'}, inplace=True)
 
     print('Done determining the surface of the roads from lines!')
 
