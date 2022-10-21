@@ -37,29 +37,32 @@ def compare_histograms(data, graph_title=None, axis_label=None):
     return fig
 
 
-def get_df_stats(dataframe, col, results_dict = None, to_df = False):
+def get_df_stats(dataframe, col, results_dict = None, suffix='', to_df = False):
     '''
     Get the min, max, mean, median, std and count of a column in a dataframe and send back a dict or a dataframe
 
     - dataframe: dataframe from which the statistics will be calculated
     - col: sting or list of string indicating the column(s) from which the statistics will be calculated
     - result dict: dictionary for the results with the key 'min', 'max', 'mean', 'median', 'std', and 'count'
+    - suffix of the band
     - to_df: results from dictionary to dataframe
     '''
 
     if results_dict==None:
-        results_dict={'min': [], 'max': [], 'mean': [], 'median': [], 'std': [], 'count': [], 'confidance': []}
+        results_dict={f'min{suffix}': [], f'max{suffix}': [], f'mean{suffix}': [], f'median{suffix}': [], f'std{suffix}': [],
+                    f'count{suffix}': [], f'confidance{suffix}': []}
 
-    results_dict['min'].append(dataframe[col].min())
-    results_dict['max'].append(dataframe[col].max())
-    results_dict['mean'].append(dataframe[col].mean())
-    results_dict['median'].append(dataframe[col].median())
-    results_dict['std'].append(dataframe[col].std())
-    results_dict['count'].append(dataframe[col].count())
+    results_dict[f'min{suffix}'].append(int(dataframe[col].min()))
+    results_dict[f'max{suffix}'].append(int(dataframe[col].max()))
+    results_dict[f'mean{suffix}'].append(dataframe[col].mean().round(2))
+    results_dict[f'median{suffix}'].append(dataframe[col].median())
+    results_dict[f'std{suffix}'].append(dataframe[col].std().round(2))
+    results_dict[f'count{suffix}'].append(dataframe[col].count())
 
     # Get the confidance interval for > 95%
     Z = 2
-    results_dict['confidance'].append(Z * results_dict['std'][-1] / (results_dict['count'][-1]**(1/2)))
+    results_dict[f'confidance{suffix}'].append(np.round(Z * results_dict[f'std{suffix}'][-1] / (results_dict[f'count{suffix}'][-1]**(1/2)),
+                                                        decimals=3))
 
     if to_df:
         results_df=pd.DataFrame(results_dict)

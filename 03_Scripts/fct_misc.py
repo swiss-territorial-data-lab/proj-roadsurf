@@ -65,6 +65,8 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
         no_data=0
         # print('The value of "no data" is set to 0 by default.')
     
+    dico={}
+    length_bands=[]
     for band in BANDS:
 
         # extract the values of the masked array
@@ -72,13 +74,26 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
 
         # extract the the valid values
         val = np.extract(data != no_data, data)
-        val_0 = np.extract(data == no_data, data)
 
-        # print(f'{len(val_0)} pixels equal to the no data value ({no_data}).')
+        dico[f'band{band}']=val
+        length_bands.append(len(val))
 
-        d=pd.DataFrame({'pix_val':val, 'band_num': band, **kwargs})
+    dico.update(**kwargs)
 
-        pixel_values = pd.concat([pixel_values, d],ignore_index=True)
+    max_length=max(length_bands)
+
+    for band in BANDS:
+
+        if length_bands[band-1] < max_length:
+
+            fill=[no_data]*max_length
+            dico[f'band{band}']=np.append(dico[f'band{band}'], fill[length_bands[band-1]:])
+
+            print(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the road' +
+                        f' {int(polygons.OBJECTID)} (cover {polygons.BELAGSART}),' +
+                        f' got replaced with the value used of no data ({no_data}).')
+
+    pixel_values = pd.concat([pixel_values, pd.DataFrame(dico)],ignore_index=True)
 
     return pixel_values, no_data
 
