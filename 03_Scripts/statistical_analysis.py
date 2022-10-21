@@ -37,18 +37,20 @@ def im_of_hist_comp(band, roads, pixels_per_band, dirpath_f_images, prefix=''):
     '''
     written_files_fct=[]
 
-    for road_idx in roads.index:
-        objectid=roads.loc[road_idx, 'road_id']
-        cover=roads.loc[road_idx, 'road_type']
-        p_value=roads.loc[road_idx, f'ks_p_{band}']
+    for road_row in roads.itertuples():
+        objectid=road_row.road_id
+        cover=road_row.road_type
+        p_value=getattr(road_row, f'ks_p_{band}')
 
         road_pixels=pixels_per_band.loc[pixels_per_band['road_id'] == objectid, band]
-        all_pixels=pixels_per_band.loc[pixels_per_band['road_type'] == cover, band]
+        corresponding_pixels=pixels_per_band.loc[pixels_per_band['road_type'] == cover, band]
+        other_pixels=pixels_per_band.loc[pixels_per_band['road_type'] != cover, band]
 
         nbr_road_pixels=road_pixels.shape[0]
 
-        ks_graph=fs.compare_histograms(road_pixels, all_pixels,
-                                    label1='pixels of the road', label2=f'{cover} pixels',
+        data={'pixels of the road': road_pixels, f'{cover} pixels': corresponding_pixels, 'other pixels': other_pixels}
+
+        ks_graph=fs.compare_histograms(data,
                                     graph_title=f'''Histogram of the distribution of the {nbr_road_pixels} pixels
                                             on the {band} band (p-value: {p_value})''',
                                     axis_label='density of the pixels')
@@ -119,9 +121,9 @@ if __name__ == "__main__":
     tiles_info_reproj=tiles_info.to_crs(epsg=3857)
 
     fp_list=[]
-    for tile_idx in tiles_info_reproj.index:
+    for tile_idx in tiles_info_reproj['id'].values:
             # Get the name of the tiles
-            x, y, z = tiles_info_reproj.loc[tile_idx,'id'].lstrip('(,)').rstrip('(,)').split(',')
+            x, y, z = tile_idx.lstrip('(,)').rstrip('(,)').split(',')
             im_name = z.lstrip() + '_' + x + '_' + y.lstrip() + '.tif'
             im_path = os.path.join(TILES_DIR, im_name)
             fp_list.append(im_path)
@@ -145,6 +147,11 @@ if __name__ == "__main__":
 
         clipped_roads=pd.concat([clipped_roads,roads_to_tile], ignore_index=True)
 
+    fct_misc.test_crs(corrected_roads.crs, tiles_info_reproj.crs)
+    intersected_tiles=gpd.sjoin(tiles_info_reproj, corrected_roads[['OBJECTID', 'geometry']])
+
+    del roads, simplified_roads, roads_reproj, roads_to_tile
+    del tiles_info, tiles_info_reproj
 
 
     ## Determination of the statistics for the road segments
@@ -153,23 +160,17 @@ if __name__ == "__main__":
     if USE_ZONAL_STATS:
         roads_stats=pd.DataFrame()
 
-        for tile_idx in tqdm(tiles_info_reproj.index, desc='Calculating zonal statistics'):
+        for tile_row in tqdm(tiles_info_reproj.itertuples(), total=tiles_info_reproj.shape[0], desc='Calculating zonal statistics'):
 
-            roads_on_tile=clipped_roads[clipped_roads['tile']==tiles_info_reproj.loc[tile_idx,'title']]
+            roads_on_tile=clipped_roads[clipped_roads['tile']==tile_row.title]
 
             # Get the path of the tile
-            im_path=tiles_info_reproj.loc[tile_idx,'filepath']
+            im_path=tile_row.filepath
 
             roads_on_tile.reset_index(drop=True, inplace=True)
 
             # Calculation for each road on each band
-            for road_idx in roads_on_tile.index:
-
-                road=roads_on_tile.iloc[road_idx:road_idx+1]
-
-                if road.shape[0]>1:
-                    print('More than one road is being tested.')
-                    sys.exit(1)
+            for road in roads_on_tile.itertuples():
 
                 for band_num in BANDS:
 
@@ -177,47 +178,47 @@ if __name__ == "__main__":
                                         band=band_num, nodata=0)
                     stats_dict=stats[0]
                     stats_dict['band']=band_num
-                    stats_dict['road_id']=road.loc[road_idx,'OBJECTID']
-                    stats_dict['road_type']=road.loc[road_idx,'BELAGSART']
-                    stats_dict['geometry']=road.loc[road_idx,'geometry']
-                    stats_dict['tile_id']=tiles_info_reproj.loc[tile_idx,'id']
+                    stats_dict['road_id']=road.OBJECTID
+                    stats_dict['road_type']=road.BELAGSART
+                    stats_dict['geometry']=road.geometry
+                    stats_dict['tile_id']=tile_row.id
 
                     roads_stats = pd.concat([roads_stats, pd.DataFrame(stats_dict,index=[0])],ignore_index=True)
+
+        del stats_dict
+        del roads_on_tile
 
     else:
         roads_stats={'band':[], 'road_id': [], 'road_type': [], 'road_width': [], 'geometry': [],
                     'min':[], 'max':[], 'mean':[], 'median':[], 'std':[], 'count':[], 'confidance': []}
 
         pixel_values=pd.DataFrame()
-        for road_idx in tqdm(corrected_roads.index, desc='Extracting road statistics'):
+
+        try:
+            assert not corrected_roads['OBJECTID'].duplicated().any()
+        except:
+            print('Some roads are separated on mulitple lines. They must be transformed to multipolygons of fused first.')
+            sys.exit(1)
+
+        for road in tqdm(corrected_roads.itertuples(), total=corrected_roads.shape[0], desc='Extracting road statistics'):
 
             # Get the characteristics of the road
-            objectid=corrected_roads.loc[road_idx, 'OBJECTID']
-            cover_type=corrected_roads.loc[road_idx, 'BELAGSART']
-            width=corrected_roads.loc[road_idx, 'road_width']
-            road=corrected_roads.loc[corrected_roads['OBJECTID'] == objectid,['OBJECTID', 'BELAGSART', 'geometry']]
-            road.reset_index(inplace=True, drop=True)
-            geometry = road.loc[0,'geometry'] if road.shape[0]==1 else MultiPolygon([road.loc[k,'geometry'] for k in road.index])
+            objectid=road.OBJECTID
+            cover_type=road.BELAGSART
+            width=road.road_width
+            geometry=road.geometry
 
-            if objectid in roads_stats['road_id']:
-                continue
-            
             # Get the corresponding tile(s)
-            fct_misc.test_crs(road.crs, tiles_info_reproj.crs)
-            intersected_tiles=gpd.overlay(tiles_info_reproj, road)
+            intersected_tiles_with_road=intersected_tiles[intersected_tiles['OBJECTID'] == objectid].copy()
 
-            intersected_tiles.drop_duplicates(subset=['id'], inplace=True)
-            intersected_tiles.reset_index(drop=True, inplace=True)
+            intersected_tiles_with_road.drop_duplicates(subset=['id'], inplace=True)
+            intersected_tiles_with_road.reset_index(drop=True, inplace=True)
 
             pixel_values_road=pd.DataFrame()
-
             # Get the pixels for each tile
-            for tile_idx in intersected_tiles.index:
-
-                # Get the name of the tiles
-                im_path = intersected_tiles.loc[tile_idx,'filepath']
+            for tile_filepath in intersected_tiles_with_road['filepath'].values:
                 
-                pixel_values_road, no_data = fct_misc.get_pixel_values(road, im_path, BANDS, pixel_values_road,
+                pixel_values_road, no_data = fct_misc.get_pixel_values(road, tile_filepath, BANDS, pixel_values_road,
                                                             road_id=objectid, road_type=cover_type, road_width=width)
 
             if pixel_values_road.empty:
@@ -236,6 +237,8 @@ if __name__ == "__main__":
                 roads_stats['geometry'].append(geometry)
 
                 roads_stats=fs.get_df_stats(pixels_subset, 'pix_val', roads_stats)
+
+        del pixel_values_road, pixels_subset
 
         roads_stats['max']=[int(x) for x in roads_stats['max']]
         roads_stats['min']=[int(x) for x in roads_stats['min']]
@@ -388,6 +391,9 @@ if __name__ == "__main__":
 
         balance='balanced_'
 
+        del natural_pixels, artificial_pixels
+        del natural_stats, artificial_stats
+
     else:
         balance=''
 
@@ -406,6 +412,12 @@ if __name__ == "__main__":
 
     roads_stats_filtered=road_stats_read.copy()
     pixels_per_band=pixels_per_band_read.copy()
+
+
+    del pixel_values, pixels_per_band_read
+    del road_stats_read, roads_stats, roads_stats_df, roads_stats_gdf
+    del cover_stats, cover_stats_df, large_conf_int
+    
 
     ## Boxplots
     if MAKE_BOXPLOTS:
@@ -458,9 +470,11 @@ if __name__ == "__main__":
 
         for band in BANDS_STR:
             ks=[]
-            for road_idx in tqdm(roads_stats_filtered.index, desc=f'Comparing road pixels to distribution on band {band}'):
-                objectid=roads_stats_filtered.loc[road_idx, 'road_id']
-                cover=roads_stats_filtered.loc[road_idx, 'road_type']
+            for road_row in tqdm(roads_stats_filtered.itertuples(), total=roads_stats_filtered.shape[0],
+                                desc=f'Comparing road pixels to distribution on band {band}'):
+
+                objectid=road_row.road_id
+                cover=road_row.road_type
 
                 general_values=pixels_per_band.loc[pixels_per_band['road_type']==cover, [band, 'road_id']]
 

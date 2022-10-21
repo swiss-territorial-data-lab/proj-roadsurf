@@ -12,14 +12,11 @@ import plotly.express as px
 
 from fct_misc import ensure_dir_exists
 
-def compare_histograms(data1, data2, label1=None, label2=None, graph_title=None, axis_label=None):
+def compare_histograms(data, graph_title=None, axis_label=None):
     '''
     Make histogram of density for two dataset on the same plot.
 
-    - data1: 1st dataset as numpy array
-    - data2: 2nd dataset as numpy array
-    - label1: label for the 1st dataset
-    - label2: label for the 2nd dataset
+    - data: dictionnary of the data with the label as keys and the data as values
     - graph_title: title of the graph
     - axis_label: label for the y axis
     '''
@@ -29,8 +26,9 @@ def compare_histograms(data1, data2, label1=None, label2=None, graph_title=None,
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
     
-    ax.hist(data1, bins, alpha=0.5, label=label1, density=True)
-    ax.hist(data2, bins, alpha=0.5, label=label2, density=True)
+    for data_label in data.keys():
+        ax.hist(data[data_label], bins, alpha=0.3, label=data_label, density=True)
+
     ax.legend(loc='upper right')
     ax.grid()
 
@@ -159,8 +157,7 @@ def calculate_pca(dataset, features, to_describe,
     ensure_dir_exists(dirpath_images)
     label_pc = [f'PC{x}' for x in range(1, len(features)+1)]
 
-    if file_prefix[-1]!='_':
-            file_prefix=file_prefix + '_'
+    file_prefix = file_prefix + '_' if file_prefix[-1]!='_' else file_prefix
 
     # 1. Define the variables and scale
     dataset.reset_index(drop=True, inplace=True)

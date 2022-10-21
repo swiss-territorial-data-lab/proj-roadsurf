@@ -50,9 +50,9 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
     '''
     
     # extract the geometry in GeoJSON format
-    geoms = polygons.geometry.values # list of shapely geometries
+    geoms = polygons.geometry # list of shapely geometries
 
-    geoms = [mapping(geoms[0])]
+    geoms = [mapping(geoms)]
 
     # extract the raster values values within the polygon 
     with rasterio.open(tile) as src:
