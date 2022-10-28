@@ -58,7 +58,7 @@ generate_tilesets.py:
 statistical_analysis.py:
   debug_mode: false
   use_zonal_stats: false
-  correct_balance: false
+  correct_balance: true
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
@@ -68,7 +68,7 @@ statistical_analysis.py:
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
     pixel_threshold: 10
-    max_confidance: 12.5
+    max_confidence: 12.5
     make_boxplots: true
     do_ks_test: false
     make_pca: true

@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry.multipolygon import MultiPolygon
 
 from rasterstats import zonal_stats
 from scipy.stats import kstest
@@ -70,7 +69,7 @@ USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
 
 BANDS=range(1,5)
-MAX_CONFIDANCE_INT = cfg['param']['max_confidance']
+MAX_CONFIDENCE_INT = cfg['param']['max_confidence']
 COUNT_THRESHOLD = cfg['param']['pixel_threshold']
 
 DO_KS_TEST = cfg['param']['do_ks_test']
@@ -97,7 +96,7 @@ if __name__ == "__main__":
     tiles_info = gpd.read_file(TILES_INFO)
 
 
-    # Data treatment
+    # Data fromatting
     if DEBUG_MODE:
         tiles_info=tiles_info[1:500]
         print('Debug mode activated: only 500 tiles will be processed.')
@@ -139,21 +138,58 @@ if __name__ == "__main__":
        corrected_roads=roads_reproj.copy()
        corrected_roads.loc[corrected_roads.is_valid==False,'geometry']=corrected_roads[corrected_roads.is_valid==False]['geometry'].buffer(0)
 
-    clipped_roads=gpd.GeoDataFrame()
-    for idx in tqdm(tiles_info_reproj.index, desc='Clipping roads'):
+    roads_base=pd.DataFrame(corrected_roads[['OBJECTID', 'BELAGSART', 'road_width', 'geometry']]).rename(columns={'OBJECTID': 'road_id', 
+                            'BELAGSART':'road_type'})
+    
+    if USE_ZONAL_STATS:
+        clipped_roads=gpd.GeoDataFrame()
+        for idx in tqdm(tiles_info_reproj.index, desc='Clipping roads'):
 
-        roads_to_tile = gpd.clip(corrected_roads, tiles_info_reproj.loc[idx,'geometry']).explode(index_parts=False)
-        roads_to_tile['tile']=tiles_info_reproj.loc[idx, 'title']
+            roads_to_tile = gpd.clip(corrected_roads, tiles_info_reproj.loc[idx,'geometry']).explode(index_parts=False)
+            roads_to_tile['tile']=tiles_info_reproj.loc[idx, 'title']
 
-        clipped_roads=pd.concat([clipped_roads,roads_to_tile], ignore_index=True)
+            clipped_roads=pd.concat([clipped_roads,roads_to_tile], ignore_index=True)
+
+        del roads_to_tile
 
     fct_misc.test_crs(corrected_roads.crs, tiles_info_reproj.crs)
     intersected_tiles=gpd.sjoin(tiles_info_reproj, corrected_roads[['OBJECTID', 'geometry']])
+    intersected_tiles.drop_duplicates(subset=['id','OBJECTID'], inplace=True)
 
-    del roads, simplified_roads, roads_reproj, roads_to_tile
+    try:
+        assert not corrected_roads['OBJECTID'].duplicated().any()
+    except:
+        print('Some roads are separated on mulitple lines. They must be transformed to multipolygons or fused first.')
+        sys.exit(1)
+
+    pixels_per_band=pd.DataFrame()
+    for road in tqdm(corrected_roads.itertuples(), total=corrected_roads.shape[0], desc='Extracting road pixels'):
+
+        # Get the characteristics of the road
+        objectid=road.OBJECTID
+
+        # Get the corresponding tile(s)
+        intersected_tiles_with_road=intersected_tiles[intersected_tiles['OBJECTID'] == objectid].copy()
+        intersected_tiles_with_road.reset_index(drop=True, inplace=True)
+
+        # Get the pixels for each tile
+        pixel_values=pd.DataFrame()
+        for tile_filepath in intersected_tiles_with_road['filepath'].values:
+            
+            pixel_values = fct_misc.get_pixel_values(road.geometry, tile_filepath, BANDS, pixel_values,
+                                                    road_id=objectid)
+
+        pixels_per_band=pd.concat([pixels_per_band, pixel_values], ignore_index=True)
+
+
+    pixels_per_band=pd.merge(pixels_per_band, roads_base.drop(columns=['geometry']), on = 'road_id')
+
+    del pixel_values
+    del roads, simplified_roads, roads_reproj
     del tiles_info, tiles_info_reproj
 
 
+    # Data treatment
     ## Determination of the statistics for the road segments
     print('Determination of the statistics of the roads...')
 
@@ -189,67 +225,28 @@ if __name__ == "__main__":
         del roads_on_tile
 
     else:
+        
+        roads_stats=roads_base.copy()
+        for band in tqdm(BANDS, desc='Determining the stats for bands'):
+            roads_stats_subset=fs.get_df_stats_groupby(pixels_per_band, f'band{band}', ['road_id'], suffix=f'_{band}')
+            roads_stats_subset['road_id']=roads_stats_subset.index
+            roads_stats_subset.reset_index(drop=True, inplace=True)
 
-        roads_stats={'road_id': [], 'road_type': [], 'road_width': [], 'geometry': []}
-        for band in BANDS:
-            roads_stats.update({f'max_{band}': [], f'min_{band}': [], f'mean_{band}': [], f'median_{band}': [], f'std_{band}': [],
-                                    f'count_{band}': [], f'confidance_{band}': []})
+            roads_stats=pd.merge(roads_stats, roads_stats_subset, on='road_id')
 
-        pixels_per_band=pd.DataFrame()
-
-        try:
-            assert not corrected_roads['OBJECTID'].duplicated().any()
-        except:
-            print('Some roads are separated on mulitple lines. They must be transformed to multipolygons of fused first.')
-            sys.exit(1)
-
-        for road in tqdm(corrected_roads.itertuples(), total=corrected_roads.shape[0], desc='Extracting road statistics and pixels'):
-
-            # Get the characteristics of the road
-            objectid=road.OBJECTID
-            cover_type=road.BELAGSART
-            width=road.road_width
-
-            # Get the corresponding tile(s)
-            intersected_tiles_with_road=intersected_tiles[intersected_tiles['OBJECTID'] == objectid].copy()
-
-            intersected_tiles_with_road.drop_duplicates(subset=['id'], inplace=True)
-            intersected_tiles_with_road.reset_index(drop=True, inplace=True)
-
-            pixel_values_road=pd.DataFrame()
-            # Get the pixels for each tile
-            for tile_filepath in intersected_tiles_with_road['filepath'].values:
-                
-                pixel_values_road, no_data = fct_misc.get_pixel_values(road, tile_filepath, BANDS, pixel_values_road,
-                                                            road_id=objectid, road_type=cover_type, road_width=width)
-
-            if pixel_values_road.empty:
-                continue
-
-            pixels_per_band=pd.concat([pixels_per_band, pixel_values_road], ignore_index=True)
-
-            # Get the statistics for the road
-            for band in BANDS:
-                roads_stats=fs.get_df_stats(pixel_values_road, f'band{band}', roads_stats, suffix=f'_{band}')
-
-            roads_stats['road_id'].append(objectid)
-            roads_stats['road_type'].append(cover_type)
-            roads_stats['road_width'].append(width)
-            roads_stats['geometry'].append(road.geometry)
-
-        roads_stats=pd.DataFrame(roads_stats)
         roads_stats['count']=roads_stats['count_1']
         roads_stats.drop(columns=[f'count_{band}' for band in BANDS], inplace=True)
 
-        large_conf_int=sum([roads_stats[roads_stats[f'confidance_{band}'] > MAX_CONFIDANCE_INT].shape[0] for band in BANDS])
+        large_conf_int=sum([roads_stats[roads_stats[f'confidence_{band}'] > MAX_CONFIDENCE_INT].shape[0] for band in BANDS])
         if large_conf_int != 0:
-            print(f'There are {large_conf_int} bands from roads with a confidance interval larger than {MAX_CONFIDANCE_INT} of pixel value')
+            print(f'There are {large_conf_int} confidence intervals larger than' + 
+                    f' {MAX_CONFIDENCE_INT} of pixel value.')
 
-        del pixel_values_road
+        del roads_stats_subset
 
-    roads_stats_gdf=gpd.GeoDataFrame(roads_stats)
+    # roads_stats_gdf=gpd.GeoDataFrame(roads_stats)
 
-    dirpath=fct_misc.ensure_dir_exists(os.path.join(PROCESSED_FOLDER, 'shapefiles_gpkg'))
+    # dirpath=fct_misc.ensure_dir_exists(os.path.join(PROCESSED_FOLDER, 'shapefiles_gpkg'))
 
     # roads_stats_gdf.to_file(os.path.join(dirpath, 'roads_stats.shp'))
     # written_files.append('processed/shapefiles_gpkg/roads_stats.shp')
@@ -261,35 +258,39 @@ if __name__ == "__main__":
     roads_stats_df.to_csv(os.path.join(dirpath, 'stats_roads.csv'), index=False)
     written_files.append('processed/tables/stats_roads.csv')
 
-    roads_stats_filtered=roads_stats_df[(roads_stats_df['count'] > COUNT_THRESHOLD) 
-                                        & ((roads_stats_df['confidance_1'] < MAX_CONFIDANCE_INT)
-                                        | (roads_stats_df['confidance_2'] < MAX_CONFIDANCE_INT)
-                                        | (roads_stats_df['confidance_3'] < MAX_CONFIDANCE_INT)
-                                        | (roads_stats_df['confidance_4'] < MAX_CONFIDANCE_INT))]
+    roads_stats_filtered=roads_stats_df[
+                                    (roads_stats_df['count'] > COUNT_THRESHOLD) 
+                                    & ((roads_stats_df['confidence_1'] < MAX_CONFIDENCE_INT)
+                                    | (roads_stats_df['confidence_2'] < MAX_CONFIDENCE_INT)
+                                    | (roads_stats_df['confidence_3'] < MAX_CONFIDENCE_INT)
+                                    | (roads_stats_df['confidence_4'] < MAX_CONFIDENCE_INT))
+                                    ].drop(columns=[f'confidence_{band}' for band in BANDS]+['count'])
 
     print(f'{roads_stats_df.shape[0]-roads_stats_filtered.shape[0]} roads on {roads_stats_df.shape[0]}'+
-            f' were dropped because they contained less than {COUNT_THRESHOLD} pixels or their confidance'+
-            f' interval was higher than {MAX_CONFIDANCE_INT} on one or many bands.')
-
+            f' were dropped because they contained less than {COUNT_THRESHOLD} pixels or their confidence'+
+            f' interval was higher than {MAX_CONFIDENCE_INT} on one or many bands.')
 
     ## Determination of the statistics for the pixels by type
     ### Get ratio between bands
     print('Calculating ratios between bands...')
 
     names={'1/2': 'R/G', '1/3': 'R/B', '1/4': 'R/NIR', '2/3': 'G/B', '2/4': 'G/NIR', '3/4': 'B/NIR'}
-    bands_ratio=list(names.values())
+    bands_ratio=list(names.values()) + ['VgNIR-BI']
 
     for band in BANDS:
         for sec_band in range(band+1, max(BANDS)+1):
-            pixels_per_band[names[f'{band}/{sec_band}']] = pixels_per_band[f'band{band}']/pixels_per_band[f'band{sec_band}']
+            pixels_per_band[names[f'{band}/{sec_band}']] = pixels_per_band[f'band{band}'].astype('float64')/pixels_per_band[f'band{sec_band}'].astype('float64')
 
+    pixels_per_band['VgNIR-BI']=(
+                pixels_per_band['band2'].astype('float64') - pixels_per_band['band4'].astype('float64'))/(
+                    pixels_per_band['band2'].astype('float64') + pixels_per_band['band4'].astype('float64'))
 
     ### Calculate the statistics of the pixel by band and by type of road cover
     print('Calculating the statistics per band and cover...')
 
     cover_stats={'cover':[], 'band':[],
                 'min':[], 'max':[], 'mean':[], 'median':[], 'std':[],
-                'confidance': [], 'count':[]}
+                'confidence': [], 'count':[]}
 
     for cover_type in pixels_per_band['road_type'].unique().tolist():
 
@@ -299,20 +300,15 @@ if __name__ == "__main__":
             cover_stats['cover'].append(cover_type)
             cover_stats['band'].append(band)
 
-            cover_stats=fs.get_df_stats(pixels_subset, f'band{band}', cover_stats)
+            cover_stats=fs.get_df_stats_no_group(pixels_subset, f'band{band}', cover_stats)
     
     cover_stats['max']=[int(x) for x in cover_stats['max']] # Otherwise, the values get transformed to x-256 when converted in dataframe
 
     cover_stats_df=pd.DataFrame(cover_stats)
 
-    large_conf_int=cover_stats_df[cover_stats_df['confidance'] > MAX_CONFIDANCE_INT]
-    if not large_conf_int.empty:
-        print(f'''There are {large_conf_int.shape[0]} roads with a confidance interval larger than 
-                {MAX_CONFIDANCE_INT} of pixel value''')
-
     cover_stats_df['mean']=cover_stats_df['mean'].round(1)
     cover_stats_df['std']=cover_stats_df['std'].round(1)
-    cover_stats_df['confidance']=cover_stats_df['confidance'].round(1)
+    cover_stats_df['confidence']=cover_stats_df['confidence'].round(1)
 
     dirpath=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables') )
 
@@ -368,7 +364,7 @@ if __name__ == "__main__":
 
 
     del pixels_per_band_read
-    del road_stats_read, roads_stats, roads_stats_df, roads_stats_gdf
+    del road_stats_read, roads_stats, roads_stats_df,       # roads_stats_gdf
     del cover_stats, cover_stats_df, large_conf_int
     
 

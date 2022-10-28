@@ -37,12 +37,12 @@ def ensure_dir_exists(dirpath):
     return dirpath
 
 
-def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataFrame(), **kwargs):
+def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFrame(), **kwargs):
     '''
     Extract the value of the raster pixels falling under the mask and save them in a dataframe.
     cf https://gis.stackexchange.com/questions/260304/extract-raster-values-within-shapefile-with-pygeoprocessing-or-gdal
 
-    - polygons: shapefile determining the zones where the pixels are extracted
+    - geoms: list of shapely geometries determining the zones where the pixels are extracted
     - tile: path to the raster image
     - BANDS: bands of the tile
     - pixel_values: dataframe to which the values for the pixels are going to be concatenated
@@ -50,20 +50,14 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
     '''
     
     # extract the geometry in GeoJSON format
-    geoms = polygons.geometry # list of shapely geometries
-
     geoms = [mapping(geoms)]
 
     # extract the raster values values within the polygon 
     with rasterio.open(tile) as src:
-        out_image, out_transform = mask(src, geoms, crop=True)
+        out_image, _ = mask(src, geoms, crop=True)
 
-    # no data values of the original raster
-    no_data=src.nodata
-
-    if no_data is None:
-        no_data=0
-        # print('The value of "no data" is set to 0 by default.')
+        # no data values of the original raster
+        no_data=src.nodata
     
     dico={}
     length_bands=[]
@@ -78,8 +72,6 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
         dico[f'band{band}']=val
         length_bands.append(len(val))
 
-    dico.update(**kwargs)
-
     max_length=max(length_bands)
 
     for band in BANDS:
@@ -89,11 +81,17 @@ def get_pixel_values(polygons, tile, BANDS = range(1,4), pixel_values = pd.DataF
             fill=[no_data]*max_length
             dico[f'band{band}']=np.append(dico[f'band{band}'], fill[length_bands[band-1]:])
 
-            print(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the road' +
-                        f' {int(polygons.OBJECTID)} (cover {polygons.BELAGSART}),' +
+            print(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the tile {tile} and' +
                         f' got replaced with the value used of no data ({no_data}).')
 
-    pixel_values = pd.concat([pixel_values, pd.DataFrame(dico)],ignore_index=True)
+    dico.update(**kwargs)
+    pixels_from_tile = pd.DataFrame(dico)
 
-    return pixel_values, no_data
+    if no_data is None:
+        subset=pixels_from_tile[[f'band{band}' for band in BANDS]]
+        pixels_from_tile = pixels_from_tile.drop(pixels_from_tile[subset.apply(lambda x: (max(x) == 0), 1)].index)
+
+    pixel_values = pd.concat([pixel_values, pixels_from_tile],ignore_index=True)
+
+    return pixel_values
 
