@@ -44,6 +44,7 @@ else:
     
     DEBUG_MODE=cfg['debug_mode']
     KUNSTBAUTE_TO_KEEP=[100, 200]
+    BELAGSART_TO_KEEP=[100, 200]
 
     if GENERATE_TILES_INFO:
         ZOOM_LEVEL=cfg['zoom_level']
@@ -106,10 +107,11 @@ if DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI:
 
     joined_roads=roads.merge(roads_parameters[['GDB-Code','Width']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
     joined_uncovered_roads=joined_roads[joined_roads['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
+    joined_uncovered_roads_of_interest=joined_uncovered_roads[joined_uncovered_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)]
 
     aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=2056)
-    fct_misc.test_crs(joined_uncovered_roads.crs, aoi_geom.crs)
-    joined_roads_in_aoi=joined_uncovered_roads.overlay(aoi_geom, how='intersection')
+    fct_misc.test_crs(joined_uncovered_roads_of_interest.crs, aoi_geom.crs)
+    joined_roads_in_aoi=joined_uncovered_roads_of_interest.overlay(aoi_geom, how='intersection')
 
     if DEBUG_MODE:
         joined_roads_in_aoi=joined_roads_in_aoi[1:100]
@@ -338,4 +340,6 @@ if GENERATE_TILES_INFO:
     written_files.append(layername + ' in the geopackage shapefiles_gpkg/epsg3857_tiles.gpkg')
 
 print('All done!')
-print(f'Written files: {written_files}')
+print('Written files:')
+for file in written_files:
+    print(file)

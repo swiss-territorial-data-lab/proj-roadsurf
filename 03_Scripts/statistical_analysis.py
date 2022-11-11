@@ -504,4 +504,6 @@ if __name__ == "__main__":
             written_files.extend(written_files_pca_stats)
 
 
-    print(f'Checkout the written files: {written_files}')
+    print('Checkout the written files:')
+    for file in written_files:
+        print(file)
