@@ -2,8 +2,8 @@ prepare_data.py:
   debug_mode: false
   tasks:
     determine_roads_surfaces: true
-    determine_restricted_AOI: false
-    generate_tiles_info: false
+    determine_restricted_AOI: true
+    generate_tiles_info: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -14,6 +14,13 @@ prepare_data.py:
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
   zoom_level: 17  # keep between 17 and 20  
 
+
+correct_gt.py:
+  input:
+    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
+    input_files:
+      initial_roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
+      corrections: /initial/TLM/Strassen/test_natural_roads_feedback.shp
 
 RS_images_to_S3.py:
   access_key: ...
@@ -27,7 +34,7 @@ RS_images_to_S3.py:
 generate_tilesets.py:
   debug_mode: False
   datasets:
-    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi_z20.geojson
+    aoi_tiles_geojson: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/json/tiles_aoi.geojson
     orthophotos_web_service:
       type: XYZ      # supported values: 1. MIL = Map Image Layer 2. WMS 3. XYZ
       url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&bidx=1&no_data=0&return_mask=false&pixel_selection=lowest
@@ -58,17 +65,17 @@ generate_tilesets.py:
 statistical_analysis.py:
   debug_mode: false
   use_zonal_stats: false
-  correct_balance: true
+  correct_balance: false
   processed:
     processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
     input_files:
       images: /obj_detector/all-images
       roads: /shapefiles_gpkg/roads_polygons.shp
-      tiles: /json/tiles_aoi_z17.geojson
+      tiles: /json/tiles_aoi.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
-    pixel_threshold: 10
-    max_confidence: 12.5
+    pixel_threshold: 50
+    max_confidence: 5
     make_boxplots: true
     do_ks_test: false
     make_pca: true

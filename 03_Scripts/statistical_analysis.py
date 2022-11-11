@@ -275,7 +275,7 @@ if __name__ == "__main__":
     print('Calculating ratios between bands...')
 
     names={'1/2': 'R/G', '1/3': 'R/B', '1/4': 'R/NIR', '2/3': 'G/B', '2/4': 'G/NIR', '3/4': 'B/NIR'}
-    bands_ratio=list(names.values()) + ['VgNIR-BI']
+    bands_ratio = ['VgNIR-BI']     # + list(names.values())
 
     for band in BANDS:
         for sec_band in range(band+1, max(BANDS)+1):
@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
         bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
                                                 title=f'Repartition of the values for the pixels',
-                                                figsize=(10,8),
+                                                figsize=(12,8),
                                                 grid=True)
         fig = bp_pixel_bands[0].get_figure()
         fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'), bbox_inches='tight')
