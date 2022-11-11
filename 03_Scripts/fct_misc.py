@@ -89,9 +89,10 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
     dico.update(**kwargs)
     pixels_from_tile = pd.DataFrame(dico)
 
-    # if no_data is None:
-    #     subset=pixels_from_tile[[f'band{band}' for band in BANDS]]
-    #     pixels_from_tile = pixels_from_tile.drop(pixels_from_tile[subset.apply(lambda x: (max(x) == 0), 1)].index)
+    # We consider that the nodata values are where the value is 0 on each band
+    if no_data is None:
+        subset=pixels_from_tile[[f'band{band}' for band in BANDS]]
+        pixels_from_tile = pixels_from_tile.drop(pixels_from_tile[subset.apply(lambda x: (max(x) == 0), 1)].index)
 
     pixel_values = pd.concat([pixel_values, pixels_from_tile],ignore_index=True)
 
