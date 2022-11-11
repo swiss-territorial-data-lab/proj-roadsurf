@@ -1,0 +1,9 @@
+01_Documentation*
+04_Reports*
+
+# Byte-compiled files
+03_Scripts/__pycache__/
+03_Scripts/helpers/__pycache__/
+
+# Jupyter notebook checkpoints
+03_Scipts/.ipynb

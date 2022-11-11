@@ -55,6 +55,7 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
     # extract the raster values values within the polygon 
     with rasterio.open(tile) as src:
         out_image, _ = mask(src, geoms, crop=True)
+        # out_image, _ = mask(src, geoms, crop=True, filled=False)
 
         # no data values of the original raster
         no_data=src.nodata
@@ -68,6 +69,7 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
 
         # extract the the valid values
         val = np.extract(data != no_data, data)
+        # val = np.extract(~data.mask, data.data)
 
         dico[f'band{band}']=val
         length_bands.append(len(val))
@@ -81,15 +83,15 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
             fill=[no_data]*max_length
             dico[f'band{band}']=np.append(dico[f'band{band}'], fill[length_bands[band-1]:])
 
-            print(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the tile {tile} and' +
+            print(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the tile {tile[-18:]} and' +
                         f' got replaced with the value used of no data ({no_data}).')
 
     dico.update(**kwargs)
     pixels_from_tile = pd.DataFrame(dico)
 
-    if no_data is None:
-        subset=pixels_from_tile[[f'band{band}' for band in BANDS]]
-        pixels_from_tile = pixels_from_tile.drop(pixels_from_tile[subset.apply(lambda x: (max(x) == 0), 1)].index)
+    # if no_data is None:
+    #     subset=pixels_from_tile[[f'band{band}' for band in BANDS]]
+    #     pixels_from_tile = pixels_from_tile.drop(pixels_from_tile[subset.apply(lambda x: (max(x) == 0), 1)].index)
 
     pixel_values = pd.concat([pixel_values, pixels_from_tile],ignore_index=True)
 
