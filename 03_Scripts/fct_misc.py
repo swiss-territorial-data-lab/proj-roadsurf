@@ -98,3 +98,21 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
 
     return pixel_values
 
+def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
+
+    try:
+        assert(poly_gdf[poly_gdf.is_valid==False].shape[0]==0), \
+              f"{poly_gdf[poly_gdf.is_valid==False].shape[0]} geometries are invalid{f' among {gdf_obj_name}' if gdf_obj_name else ''}."
+    except Exception as e:
+        print(e)
+        if correct:
+            print("Correction of the invalid geometries with a buffer of 0 m...")
+            corrected_poly=poly_gdf.copy()
+            corrected_poly.loc[corrected_poly.is_valid==False,'geometry']= \
+                            corrected_poly[corrected_poly.is_valid==False]['geometry'].buffer(0)
+
+            return corrected_poly
+        else:
+            sys.exit(1)
+
+    return poly_gdf

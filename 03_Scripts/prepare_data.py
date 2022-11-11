@@ -26,8 +26,9 @@ with open('03_Scripts/config.yaml') as fp:
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 DETERMINE_RESTRICTED_AOI = cfg['tasks']['determine_restricted_AOI']
 GENERATE_TILES_INFO=cfg['tasks']['generate_tiles_info']
+GENERATE_LABELS=cfg['tasks']['generate_labels']
 
-if not DETERMINE_ROAD_SURFACES and not DETERMINE_RESTRICTED_AOI and not GENERATE_TILES_INFO:
+if not (DETERMINE_ROAD_SURFACES or DETERMINE_RESTRICTED_AOI or GENERATE_TILES_INFO or GENERATE_LABELS) :
     print('Nothing to do. Exiting!')
     sys.exit(0)
 else:
@@ -46,9 +47,11 @@ else:
     KUNSTBAUTE_TO_KEEP=[100, 200]
     BELAGSART_TO_KEEP=[100, 200]
 
-    if GENERATE_TILES_INFO:
+    if GENERATE_TILES_INFO or GENERATE_LABELS:
         ZOOM_LEVEL=cfg['zoom_level']
 
+path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
+path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
 
 # Define functions --------------------------------------------------------------------
 
@@ -310,13 +313,54 @@ if GENERATE_TILES_INFO:
 
     print('Done determining the tiles!')
 
+if GENERATE_LABELS:
+    print('Generating the labels for the object detector...')
+
+    if not DETERMINE_ROAD_SURFACES:
+        non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, 'roads_polygons.shp'))
+
+    if not GENERATE_TILES_INFO:
+        tiles_in_restricted_aoi=gpd.read_file(os.path.join(path_json, 'tiles_aoi.geojson'))
+    
+    non_forest_roads=fct_misc.test_valid_geom(non_forest_roads, gdf_obj_name='the roads')
+
+    labels_gdf = non_forest_roads.rename(columns={'BELAGSART': 'CATEGORY', 'road_width':'WIDTH'}).drop(columns=[
+                        'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1',
+                        'REVISION_J', 'REVISION_M', 'GRUND_AEND', 'HERKUNFT', 'HERKUNFT_J',
+                        'HERKUNFT_M', 'REVISION_Q', 'WANDERWEGE', 'VERKEHRSBE', 
+                        'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG', 
+                        'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME',
+                        'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng',])
+    labels_gdf['SUPERCATEGORY']='road'
+    labels_gdf = labels_gdf.to_crs(epsg=4326)
+
+    fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi.crs)
+
+    print('Done Generating the labels for the object detector...')
+
+    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
+
+    GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi, how='inner', predicate='intersects')
+
+    # the following two lines make sure that no object is counted more than once in case it intersects multiple tiles
+    GT_labels_gdf = GT_labels_gdf[labels_gdf.columns]
+    GT_labels_gdf.drop_duplicates(inplace=True)
+    OTH_labels_gdf = labels_gdf[ ~labels_gdf.index.isin(GT_labels_gdf.index)]
+
+    try:
+        assert( len(labels_gdf) == len(GT_labels_gdf) + len(OTH_labels_gdf) ),\
+            f"Something went wrong when splitting labels into Ground Truth Labels and Other Labels." +\
+            f" Total no. of labels = {len(labels_gdf)}; no. of Ground Truth Labels = {len(GT_labels_gdf)}; no. of Other Labels = {len(OTH_labels_gdf)}"
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+
+    # In the current case, OTH_labels_gdf should be empty
+
 # Save results ------------------------------------------------------------------
 print('Saving files...')
 
 written_files=[]
-
-path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
-path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
 
 if DETERMINE_ROAD_SURFACES:
     non_forest_roads.to_file(os.path.join(path_shp_gpkg, 'roads_polygons.shp'))
@@ -338,6 +382,14 @@ if GENERATE_TILES_INFO:
 
     written_files.append('json/tiles_aoi.geojson')
     written_files.append(layername + ' in the geopackage shapefiles_gpkg/epsg3857_tiles.gpkg')
+
+if GENERATE_LABELS:
+    GT_labels_gdf.to_file(os.path.join(path_json, f'ground_truth_labels.geojson'), driver='GeoJSON')
+    written_files.append('json/ground_truth_labels.geojson')
+
+    if not OTH_labels_gdf.empty:
+        OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
+        written_files.append('json/other_labels.geojson')
 
 print('All done!')
 print('Written files:')

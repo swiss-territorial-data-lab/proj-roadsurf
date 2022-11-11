@@ -1,9 +1,10 @@
 prepare_data.py:
   debug_mode: false
   tasks:
-    determine_roads_surfaces: true
-    determine_restricted_AOI: true
-    generate_tiles_info: true
+    determine_roads_surfaces: false
+    determine_restricted_AOI: false
+    generate_tiles_info: false
+    generate_labels: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
