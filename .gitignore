@@ -2,8 +2,9 @@
 04_Reports*
 
 # Byte-compiled files
-03_Scripts/__pycache__/
-03_Scripts/helpers/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
 
 # Jupyter notebook checkpoints
 03_Scipts/.ipynb
