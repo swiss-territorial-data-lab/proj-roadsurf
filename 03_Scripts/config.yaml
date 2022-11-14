@@ -3,18 +3,30 @@ prepare_data.py:
   tasks:
     determine_roads_surfaces: false
     determine_restricted_AOI: false
+  input:
+    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
+    input_files:
+      roads: /initial/TLM/Strassen/corrected_roads_inside_AOI.shp
+      roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
+      forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
+      aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+
+prepare_data_od.py:
+  debug_mode: false
+  tasks:
+    determine_roads_surfaces: false
     generate_tiles_info: false
     generate_labels: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
-      roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
+      roads: /initial/TLM/Strassen/corrected_roads_inside_AOI.shp
       roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
   zoom_level: 17  # keep between 17 and 20  
-
 
 correct_gt.py:
   input:

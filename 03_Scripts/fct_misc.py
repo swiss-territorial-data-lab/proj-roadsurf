@@ -20,7 +20,7 @@ def test_crs(crs1, crs2 = "EPSG:2056"):
         crs2=crs2.crs
 
     try:
-        assert(crs1 == crs2), "CRS mismatch between the two files."
+        assert(crs1 == crs2), f"CRS mismatch between the two files ({crs1} vs {crs2})."
     except Exception as e:
         print(e)
         sys.exit(1)
@@ -98,7 +98,50 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
 
     return pixel_values
 
+
+def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
+    '''
+    Make the difference of the geometry at row p2_idx with the one at the row p1_idx
+    
+    - dataset of polygons
+    - index of the "obstacle" polygon in the dataset
+    - index of the final polygon
+    '''
+    
+    # Store intermediary results back to poly
+    diff=polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']
+
+    if diff.geom_type == 'Polygon':
+        polygons.loc[p2_idx,'geometry'] -= polygons.loc[p1_idx,'geometry']
+
+    elif diff.geom_type == 'MultiPolygon':
+        # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
+        polygons.loc[p2_idx,'geometry'] = max((polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
+
+        parts=[poly.area for poly in diff.geoms]
+        parts.sort(reverse=True)
+        
+        for area in parts[1:]:
+            if area>3:
+                print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
+                # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
+                # maintaining the orginal id to trace the roads back at the end.
+                # Or add .1, .2 ect. to the original 1 
+                # Or to only have multipolygons to pass the function gpd.overlay
+                # Or add id based on geometry
+
+    return polygons
+
+
 def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
+    '''
+    Test if all the geometry of a dataset are valid. When it is not the case, correct the geometries with a buffer of 0 m if correct != False
+    and stop with an error otherwise.
+
+    - poly_gdf: dataframe of geometries to check
+    - correct: boolean indicating if the invalid geometries should be corrected with a buffer of 0 m
+    - gdf_boj_name: name of the dataframe of the object in it to print with the error message
+    '''
 
     try:
         assert(poly_gdf[poly_gdf.is_valid==False].shape[0]==0), \
