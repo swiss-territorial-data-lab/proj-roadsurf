@@ -103,9 +103,9 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
     '''
     Make the difference of the geometry at row p2_idx with the one at the row p1_idx
     
-    - dataset of polygons
-    - index of the "obstacle" polygon in the dataset
-    - index of the final polygon
+    - polygons: dataset of polygons
+    - p1_idx: index of the "obstacle" polygon in the dataset
+    - p2_idx: index of the final polygon
     '''
     
     # Store intermediary results back to poly
@@ -122,7 +122,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
         parts.sort(reverse=True)
         
         for area in parts[1:]:
-            if area>3:
+            if area>5:
                 print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
                 # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
                 # maintaining the orginal id to trace the roads back at the end.
