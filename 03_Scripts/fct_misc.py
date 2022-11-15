@@ -99,13 +99,14 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
     return pixel_values
 
 
-def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
+def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=False):
     '''
     Make the difference of the geometry at row p2_idx with the one at the row p1_idx
     
     - polygons: dataset of polygons
     - p1_idx: index of the "obstacle" polygon in the dataset
     - p2_idx: index of the final polygon
+    - keep_everything: boolean indicating if we should keep large parts that would be eliminated otherwise
     '''
     
     # Store intermediary results back to poly
@@ -118,17 +119,35 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx):
         # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
         polygons.loc[p2_idx,'geometry'] = max((polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
 
-        parts=[poly.area for poly in diff.geoms]
-        parts.sort(reverse=True)
-        
-        for area in parts[1:]:
-            if area>5:
-                print(f"WARNING: when filtering for multipolygons, an area of {round(area,2)} m2 was lost for the polygon {round(polygons.loc[p2_idx,'OBJECTID'])}.")
-                # To correct that, we should introduce a second id that we could prolong with the "new" road made by the multipolygon parts, while
-                # maintaining the orginal id to trace the roads back at the end.
-                # Or add .1, .2 ect. to the original 1 
-                # Or to only have multipolygons to pass the function gpd.overlay
-                # Or add id based on geometry
+        limit=10
+        parts_geom=[poly for poly in diff.geoms if poly.area>limit]
+        if len(parts_geom)>1 and keep_everything:
+            parts_area=[poly.area for poly in diff.geoms if poly.area>limit]
+            parts=pd.DataFrame({'geometry':parts_geom,'area':parts_area})
+            parts.sort_values(by='area', ascending=False, inplace=True)
+            
+            new_row_serie=polygons.loc[p2_idx].copy()
+            new_row_dict={'OBJECTID': [], 'OBJEKTART': [], 'KUNSTBAUTE': [], 'BELAGSART': [], 'geometry': [], 
+                        'GDB-Code': [], 'Width': [], 'saved_geom': []}
+            new_poly=0
+            for elem_geom in parts['geometry'].values[1:]:
+                
+                new_row_dict['OBJECTID'].append(int(str(int(new_row_serie.OBJECTID))+str(new_poly)))
+                new_row_dict['geometry'].append(elem_geom)
+                new_row_dict['OBJEKTART'].append(new_row_serie.OBJEKTART)
+                new_row_dict['KUNSTBAUTE'].append(new_row_serie.KUNSTBAUTE)
+                new_row_dict['BELAGSART'].append(new_row_serie.BELAGSART)
+                new_row_dict['GDB-Code'].append(new_row_serie['GDB-Code'])
+                new_row_dict['Width'].append(new_row_serie.Width)
+                new_row_dict['saved_geom'].append(new_row_serie.saved_geom)
+
+                # polygons.loc[len_df, 'OBJECTID']=int(str(int(polygons.loc[len_df, 'OBJECTID'])) + 
+                #                                 str(polygons.loc[len_df, 'geometry']).lstrip('POLYGON ((').rstrip('))').strip().split(', ')[0].split()[0].split('.')[0] +
+                #                                 str(polygons.loc[len_df, 'geometry']).lstrip('POLYGON ((').rstrip('))').strip().split(', ')[0].split()[0].split('.')[1])
+
+                new_poly+=1
+
+            polygons=pd.concat([polygons, pd.DataFrame(new_row_dict)], ignore_index=True)
 
     return polygons
 

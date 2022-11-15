@@ -77,6 +77,14 @@ if DETERMINE_ROAD_SURFACES:
 
     uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='left',left_on='OBJEKTART',right_on='GDB-Code')
 
+    uncovered_roads.drop(columns=[
+                                'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1', 'UUID',
+                                'REVISION_J', 'REVISION_M', 'GRUND_AEND', 'HERKUNFT', 'HERKUNFT_J',
+                                'HERKUNFT_M', 'REVISION_Q', 'WANDERWEGE', 'VERKEHRSBE', 
+                                'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG', 
+                                'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME',
+                                'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng'], inplace=True)
+
     print('Determining the surface of the roads from lines...')
 
     # Buffer the roads
@@ -119,35 +127,39 @@ if DETERMINE_ROAD_SURFACES:
     intersect_other_width.loc[intersect_other_width['OBJEKTART_1']==8.5,'OBJEKTART_1']=20
     intersect_other_width.loc[intersect_other_width['OBJEKTART_1']==2.5,'OBJEKTART_1']=21
 
-    intersect_other_width.reset_index(inplace=True, drop=True)
+    intersect_other_width.sort_values(by=['KUNSTBAUTE'], ascending=False, inplace=True, ignore_index=True)
 
     ### Suppress the overlapping intersection
     ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
-    corr_overlap1 = buffered_roads.copy()
+    corr_overlap = buffered_roads.copy()
+    new_rows_dict={'OBJECTID': [], 'OBJEKTART': [], 'KUNSTBAUTE': [], 'BELAGSART': [], 'geometry': [], 
+                'GDB-Code': [], 'Width': [], 'saved_geom': []}
+    nbr_new_poly=0
 
     for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
                 desc='-- Suppressing the overlap of roads with different width'):
         
-        poly1_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
-        poly2_id = corr_overlap1.index[corr_overlap1['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
+        poly1_id = corr_overlap.index[corr_overlap['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
+        poly2_id = corr_overlap.index[corr_overlap['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
         
-        corr_overlap1=fct_misc.polygons_diff_without_artifacts(corr_overlap1,poly1_id,poly2_id)
+        corr_overlap=fct_misc.polygons_diff_without_artifacts(corr_overlap, poly1_id, poly2_id, keep_everything=True)
 
-    corr_overlap1.drop(columns=['saved_geom'],inplace=True)
+    corr_overlap.drop(columns=['saved_geom'],inplace=True)
+    corr_overlap.set_crs(epsg=2056, inplace=True)
 
     # Exclude the roads potentially under forest canopy
     print('-- Excluding roads under forest canopy ...')
 
-    fct_misc.test_crs(corr_overlap1.crs, forests.crs)
+    fct_misc.test_crs(corr_overlap.crs, forests.crs)
 
     forests['buffered_geom']=forests.buffer(3)
     forests.drop(columns=['geometry'], inplace=True)
     forests.rename(columns={'buffered_geom':'geometry'}, inplace=True)
 
-    non_forest_roads=corr_overlap1.copy()
+    non_forest_roads=corr_overlap.copy()
     non_forest_roads=non_forest_roads.overlay(forests[['UUID','geometry']],how='difference')
 
-    non_forest_roads.drop(columns=['UUID','GDB-Code'],inplace=True)
+    non_forest_roads.drop(columns=['GDB-Code'],inplace=True)
     non_forest_roads.rename(columns={'Width':'road_width'}, inplace=True)
 
     print('Done determining the surface of the roads from lines!')
@@ -183,14 +195,7 @@ if GENERATE_TILES_INFO:
 
     roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='the roads')
 
-    roi_in_aoi.drop(columns=[
-                        'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1',
-                        'REVISION_J', 'REVISION_M', 'GRUND_AEND', 'HERKUNFT', 'HERKUNFT_J',
-                        'HERKUNFT_M', 'REVISION_Q', 'WANDERWEGE', 'VERKEHRSBE', 
-                        'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG', 
-                        'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME',
-                        'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng', 'BELAGSART', 'road_width',
-                        'OBJEKTART', 'OBJECTID', 'KUNSTBAUTE', 'GDB-Code'], inplace=True)
+    roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART', 'OBJECTID', 'KUNSTBAUTE', 'GDB-Code'], inplace=True)
     
     bboxes_extent_4326=roi_in_aoi.to_crs(epsg=4326).unary_union.bounds
 
