@@ -236,12 +236,15 @@ if GENERATE_LABELS:
         tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
 
     # TODO: do the unary_union, but keep the road types separated 
-    roads_union=non_forest_roads.unary_union
-    labels_gdf_no_crs = gpd.GeoDataFrame({'id_labels':[x for x in range(len(roads_union.geoms))],
-                                            'geometry':[geo for geo in roads_union.geoms]})
-    labels_gdf_no_crs['CATEGORY']='road'
-    labels_gdf_no_crs['SUPCATEGORY']='ground'
-    labels_gdf_2056=labels_gdf_no_crs.set_crs(epsg=2056)
+    # roads_union=non_forest_roads.unary_union
+    # labels_gdf_no_crs = gpd.GeoDataFrame({'id_labels':[x for x in range(len(roads_union.geoms))],
+    #                                         'geometry':[geo for geo in roads_union.geoms]})
+    # labels_gdf_no_crs['CATEGORY']='road'
+    # labels_gdf_no_crs['SUPCATEGORY']='ground'
+    # labels_gdf_2056=labels_gdf_no_crs.set_crs(epsg=2056)
+    labels_gdf_2056=non_forest_roads.copy()
+    labels_gdf_2056['CATEGORY']='road'
+    labels_gdf_2056['SUPERCATEGORY']='ground'
     labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
 
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
