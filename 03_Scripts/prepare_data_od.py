@@ -75,7 +75,7 @@ if DETERMINE_ROAD_SURFACES:
     roads_parameters_filtered=roads_parameters[~roads_parameters['Width'].isna()].copy()
     roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
 
-    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='left',left_on='OBJEKTART',right_on='GDB-Code')
+    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='inner',left_on='OBJEKTART',right_on='GDB-Code')
 
     uncovered_roads.drop(columns=[
                                 'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1', 'UUID',
@@ -94,10 +94,14 @@ if DETERMINE_ROAD_SURFACES:
     buffered_roads['geometry']=uncovered_roads.buffer(uncovered_roads['Width']/2, cap_style=2)
 
     ## Do not let roundabout parts make artifacts
-    for idx in buffered_roads.index:
-        geom=buffered_roads.loc[idx,'geometry']
+    buff_geometries=[]
+    for geom in buffered_roads['geometry'].values:
         if geom.geom_type == 'MultiPolygon':
-            buffered_roads.loc[idx,'geometry'] = max(buffered_roads.loc[idx,'geometry'].geoms, key=lambda a: a.area)
+            buff_geometries.append(max(geom.geoms, key=lambda a: a.area))
+        else:
+            buff_geometries.append(geom)
+        
+    buffered_roads['geometry'] = buff_geometries
 
 
     # Erase overlapping zones of roads buffer
@@ -132,9 +136,6 @@ if DETERMINE_ROAD_SURFACES:
     ### Suppress the overlapping intersection
     ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
     corr_overlap = buffered_roads.copy()
-    new_rows_dict={'OBJECTID': [], 'OBJEKTART': [], 'KUNSTBAUTE': [], 'BELAGSART': [], 'geometry': [], 
-                'GDB-Code': [], 'Width': [], 'saved_geom': []}
-    nbr_new_poly=0
 
     for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
                 desc='-- Suppressing the overlap of roads with different width'):
