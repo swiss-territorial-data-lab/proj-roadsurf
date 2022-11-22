@@ -75,3 +75,14 @@ limit_visible_aoi.py:
   output:
     images: processed/obj_detector/all-images-limited-aoi
   zoom: 17
+
+final_metrics.py:
+  debug_mode: True
+  processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  object_detector_folder: obj_detector
+  final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+  input:
+    ground_truth: json/ground_truth_labels.geojson
+    to_evaluate:
+      tst: tst_predictions.geojson
+      # oth: oth_predictions.geojson 
