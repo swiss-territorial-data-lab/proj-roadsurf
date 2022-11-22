@@ -76,7 +76,7 @@ files=[fp for fp in all_files if '/'+ str(ZOOM)+'_' in fp]
 
 print('Limiting the images to the restricted aoi...')
 print(f'The new images are saved in {IMAGES_FOLDER_OUT}.')
-for tile_filepath in tqdm(files[100:150], desc='Image treatment'):
+for tile_filepath in tqdm(files, desc='Image treatment'):
 
     # extract the raster values values within the polygon 
     with rasterio.open(tile_filepath) as src:
