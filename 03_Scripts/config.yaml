@@ -16,17 +16,18 @@ prepare_data.py:
 prepare_data_od.py:
   debug_mode: false
   tasks:
-    determine_roads_surfaces: true
-    generate_tiles_info: true
+    determine_roads_surfaces: false
+    generate_tiles_info: false
     generate_labels: true
   input:
-    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
+    input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
     input_files:
-      roads: /initial/TLM/Strassen/corrected_roads_inside_AOI.shp
-      roads_param: /initial/TLM/Strassen/Objektarten_to_keep.xlsx
-      forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
-      aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+      roads: /TLM/Strassen/corrected_roads_inside_AOI.shp
+      roads_param: /TLM/Strassen/Objektarten_to_keep.xlsx
+      forests: /TLM/Clip_Wald_Bodenbedeckung/forests.shp
+      aoi: /AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  ok_tiles: /tables/ok_tiles_z18.xlsx
   zoom_level: 18  # keep between 17 and 20  
 
 

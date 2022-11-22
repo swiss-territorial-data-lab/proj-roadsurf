@@ -44,6 +44,11 @@ else:
     KUNSTBAUTE_TO_KEEP=[100, 200]
     BELAGSART_TO_KEEP=[100, 200]
 
+    if 'ok_tiles' in cfg.keys():
+        OK_TILES=OUTPUT_DIR+cfg['ok_tiles']
+    else:
+        OK_TILES=False
+
     if GENERATE_TILES_INFO or GENERATE_LABELS:
         ZOOM_LEVEL=cfg['zoom_level']
 
@@ -235,6 +240,20 @@ if GENERATE_LABELS:
         tiles_in_restricted_aoi_4326=gpd.read_file(os.path.join(path_json, 'tiles_aoi.geojson'))
     else:
         tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
+
+    if OK_TILES:
+        if ZOOM_LEVEL==18:
+            tiles_table=pd.read_excel(OK_TILES)
+            tiles_table.replace('-','0.5', inplace=True)
+            verified_tiles=tiles_table[~tiles_table['OK'].isna()].copy()
+            verified_tiles=verified_tiles.astype({'OK': 'float'})
+
+            ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
+
+            tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles, how='right', on='title')
+        else:
+            # TODO: generalize the tiles to the correct level or to the level 18 for comparison
+            print('Ok tiles for this zoom not done yet :(')
 
     # TODO: do the unary_union, but keep the road types separated 
     # roads_union=non_forest_roads.unary_union
