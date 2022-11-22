@@ -12,11 +12,12 @@ prepare_data.py:
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
 
+
 prepare_data_od.py:
   debug_mode: false
   tasks:
-    determine_roads_surfaces: false
-    generate_tiles_info: flase
+    determine_roads_surfaces: true
+    generate_tiles_info: true
     generate_labels: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
@@ -26,7 +27,8 @@ prepare_data_od.py:
       forests: /initial/TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /initial/AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  zoom_level: 17  # keep between 17 and 20  
+  zoom_level: 18  # keep between 17 and 20  
+
 
 correct_gt.py:
   input:
@@ -34,6 +36,7 @@ correct_gt.py:
     input_files:
       initial_roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
       corrections: /initial/TLM/Strassen/test_natural_roads_feedback.shp
+
 
 RS_images_to_S3.py:
   access_key: ...
@@ -92,3 +95,14 @@ statistical_analysis.py:
     make_boxplots: true
     do_ks_test: false
     make_pca: true
+
+limit_visible_aoi.py:
+  data_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
+  input:
+    images: processed/obj_detector/all-images
+    roads: processed/shapefiles_gpkg/roads_for_OD.shp
+    roads_param: initial/TLM/Strassen/Objektarten_to_keep.xlsx
+    ground_truth: processed/json/ground_truth_labels.geojson
+  output:
+    images: processed/obj_detector/all-images-limited-aoi
+  zoom: 17
