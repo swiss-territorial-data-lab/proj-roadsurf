@@ -229,7 +229,7 @@ if GENERATE_TILES_INFO:
     for idx in tiles_in_restricted_aoi.index:
         xyz.append([re.sub('[^0-9]','',coor) for coor in tiles_in_restricted_aoi.loc[idx,'title'].split(',')])
 
-    tiles_in_restricted_aoi['id'] = [x+', '+y+', '+z for x, y, z in xyz]
+    tiles_in_restricted_aoi['id'] = ['('+ x +', '+y+', '+z + ')' for x, y, z in xyz]
 
     print('Done determining the tiles!')
 
@@ -253,7 +253,7 @@ if GENERATE_LABELS:
             tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles, how='right', on='title')
         else:
             # TODO: generalize the tiles to the correct level or to the level 18 for comparison
-            print('Ok tiles for this zoom not done yet :(')
+            print('Ok tiles for this zoom not developped yet :(')
 
     # TODO: do the unary_union, but keep the road types separated 
     # roads_union=non_forest_roads.unary_union
@@ -266,10 +266,17 @@ if GENERATE_LABELS:
     labels_gdf_2056['CATEGORY']='road'
     labels_gdf_2056['SUPERCATEGORY']='ground'
     labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
+    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
 
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
-    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
+    print('Labels on tiles...')
+    tiles_union_geom=tiles_in_restricted_aoi_4326.unary_union
+    tiles_union_df=gpd.GeoDataFrame({'id_temp':[x for x in range(len(tiles_union_geom.geoms))],
+                                    'geometry':[geo for geo in tiles_union_geom.geoms]})
+    tiles_union_df.set_crs(crs=tiles_in_restricted_aoi_4326.crs, inplace=True)
+    labels_gdf=gpd.overlay(labels_gdf, tiles_union_df)
+    labels_gdf.drop(columns=['id_temp'], inplace=True)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 
@@ -317,9 +324,18 @@ if GENERATE_LABELS:
     GT_labels_gdf.to_file(os.path.join(path_json, 'ground_truth_labels.geojson'), driver='GeoJSON')
     written_files.append('json/ground_truth_labels.geojson')
 
+    for road_type in BELAGSART_TO_KEEP:
+        temp=GT_labels_gdf[GT_labels_gdf['BELAGSART']==road_type].copy()
+        temp.to_file(os.path.join(path_json, f'ground_truth_labels_{road_type}.geojson'), driver='GeoJSON')
+        written_files.append(f'json/ground_truth_labels_{road_type}.geojson')
+
     if not OTH_labels_gdf.empty:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append('json/other_labels.geojson')
+        for road_type in BELAGSART_TO_KEEP:
+            temp=OTH_labels_gdf[OTH_labels_gdf['BELAGSART']==road_type].copy()
+            temp.to_file(os.path.join(path_json, f'other_labels_{road_type}.geojson'), driver='GeoJSON')
+            written_files.append(f'json/other_labels_{road_type}.geojson')
 
 print('All done!')
 print('Written files:')
