@@ -1,5 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
+from botocore.client import Config
 import threading
 
 import glob
@@ -15,9 +16,9 @@ import yaml
 def upload_file(file_name, bucket_name, s3_client, object_name=None):
     """Upload a file to an S3 bucket
 
-    :param file_name: File to upload
-    :param bucket: Bucket to upload to
-    :param object_name: S3 object name. If not specified then file_name is used
+    - file_name: File to upload
+    - bucket: Bucket to upload to
+    - object_name: S3 object name. If not specified then file_name is used
     :return: True if file was uploaded, else False
     """
 
@@ -94,6 +95,7 @@ if __name__=="__main__":
         aws_access_key_id=ACCESS_KEY,
         aws_secret_access_key=SECRET_KEY,
         endpoint_url=ENDPOINT_URL,
+        config=Config(s3={'addressing_style': 'path'})
     )
 
     successful_upload={'filepath':[],'success':[]}
