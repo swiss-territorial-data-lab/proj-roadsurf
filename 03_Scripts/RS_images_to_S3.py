@@ -76,7 +76,7 @@ class ProgressPercentage(object):
 if __name__=="__main__":
 
     with open('config.yaml') as fp:
-        cfg=yaml.load(fp, Loader=yaml.FullLoader['RS_images_to_S3.py'])
+        cfg=yaml.load(fp, Loader=yaml.FullLoader)['RS_images_to_S3.py']
 
     ACCESS_KEY=cfg['access_key']
     SECRET_KEY=cfg['secret_key']
