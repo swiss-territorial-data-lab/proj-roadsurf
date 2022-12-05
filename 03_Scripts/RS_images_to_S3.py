@@ -19,7 +19,8 @@ def upload_file(file_name, bucket_name, s3_client, object_name=None):
     - file_name: File to upload
     - bucket: Bucket to upload to
     - object_name: S3 object name. If not specified then file_name is used
-    :return: True if file was uploaded, else False
+    
+    return: True if file was uploaded, else False
     """
 
     # If S3 object_name was not specified, use file_name
@@ -39,6 +40,8 @@ def file_exists_online(bucketname, s3_client, objectname = None):
     
     - bucketname: bucket to check
     - object_name: S3 object name. If not specified, the file is considered to not exist in the bucket.
+
+    return: True if the file already exists, else False
     """
     
     if objectname == None:
@@ -50,6 +53,45 @@ def file_exists_online(bucketname, s3_client, objectname = None):
         return False
     
     return True
+
+def move_files(client, old_filename, old_bucket, new_filename=None, new_bucket=None):
+    '''
+    Move the files between S3 buckets or folders.
+    Delete the origin file in the origin bucket, except if the file already existed at the destination
+
+    - client: S3 client
+    - old_filename: actual path to the file with filename in the bucket
+    - old_bucket: actual bucket of the file
+    - new_filename: new path to the file with filename in the bucket. If None, equals the old filename
+    - new_bucket: new bucket to upload the file to. If None, equals the old bucketname
+
+    return: True if the file was successfully moved and deleted of the old folder, else flase.
+    '''
+
+    if new_bucket is None and new_filename is None:
+        print('Give at least a new bucketname or a new filename.')
+        return False
+
+    if new_filename is None:
+        new_filename=old_filename
+    if new_bucket is None:
+        new_bucket=old_bucket
+
+    try:
+        not file_exists_online(new_bucket, client, objectname = new_filename),
+        f'The file already exists at the destination: {new_filename}'
+    except Exception as e:
+        print(e)
+        return True
+
+    # Copy the file to the new bucket
+    copy_source = {'Bucket': old_bucket, 'Key': old_filename}
+    client.copy(copy_source, new_bucket, new_filename)
+
+    # Remove the file from the old bucket
+    response_delete=client.delete_object(Bucket=old_bucket, Key=old_filename)
+
+    return response_delete['ResponseMetadata']['HTTPStatusCode']==204
 
 
 # Definitions for classes
@@ -85,6 +127,12 @@ if __name__=="__main__":
     BUCKET=cfg['bucket']
     OUTPATH=cfg['outpath']
 
+    try:
+        OUTPATH.endswith('/'), "The path for the output folder should end with a '/'."
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+
     dataset=glob.glob(DATAPATH)
     bucket_name=BUCKET
 
@@ -109,5 +157,5 @@ if __name__=="__main__":
         successful_upload['filepath'].append(filepath)
         successful_upload['success'].append(upload_file(filepath, bucket_name, s3_client, object_name))
 
-print("Done :)")
-print(successful_upload)
+    print("Done :)")
+    print(successful_upload)
