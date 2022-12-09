@@ -251,6 +251,19 @@ if GENERATE_LABELS:
             ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
 
             tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles, how='right', on='title')
+
+            nbr_verified_tiles=verified_tiles.shape[0]
+            per_unverified_tiles=round((tiles_table.shape[0]-nbr_verified_tiles)*100/tiles_table.shape[0],2)
+            print(f"{per_unverified_tiles}% of the tiles are not verified yet.")
+
+            per_rejected_tiles=round((nbr_verified_tiles-ok_tiles.shape[0])*100/nbr_verified_tiles,2)
+            print(f"{per_rejected_tiles}% of the verified tiles were rejected")
+
+            per_good_tiles=round((ok_tiles.shape[0]-ok_tiles[ok_tiles['OK']<0.75].shape[0])*100/nbr_verified_tiles,2)
+            per_ok_tiles=round((ok_tiles.shape[0]-ok_tiles[ok_tiles['OK']>0.75].shape[0])*100/nbr_verified_tiles,2)
+            print(f"{per_good_tiles}% of the verified tiles are good.")
+            print(f"{per_ok_tiles}% of the verified tiles were are ok.")
+
         else:
             # TODO: generalize the tiles to the correct level or to the level 18 for comparison
             print('Ok tiles for this zoom not developped yet :(')
