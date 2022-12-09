@@ -241,6 +241,9 @@ print('Saving files...')
 
 written_files=[]
 
+path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
+path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
+
 if DETERMINE_ROAD_SURFACES:
     non_forest_roads.to_file(os.path.join(path_shp_gpkg, 'roads_polygons.shp'))
     written_files.append('shapefiles_gpkg/roads_polygons.shp')
