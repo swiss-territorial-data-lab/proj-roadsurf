@@ -80,6 +80,7 @@ limit_visible_aoi.py:
 final_metrics.py:
   debug_mode: True
   threshold: 0
+  initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
   object_detector_folder_100: obj_detector_100
   object_detector_folder_200: obj_detector_200
