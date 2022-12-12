@@ -250,7 +250,7 @@ if GENERATE_LABELS:
 
             ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
 
-            tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles, how='right', on='title')
+            tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles[['title','OK']], how='inner', on='title')
 
             nbr_verified_tiles=verified_tiles.shape[0]
             per_unverified_tiles=round((tiles_table.shape[0]-nbr_verified_tiles)*100/tiles_table.shape[0],2)
@@ -284,12 +284,13 @@ if GENERATE_LABELS:
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
     print('Labels on tiles...')
-    tiles_union_geom=tiles_in_restricted_aoi_4326.unary_union
-    tiles_union_df=gpd.GeoDataFrame({'id_temp':[x for x in range(len(tiles_union_geom.geoms))],
-                                    'geometry':[geo for geo in tiles_union_geom.geoms]})
-    tiles_union_df.set_crs(crs=tiles_in_restricted_aoi_4326.crs, inplace=True)
-    labels_gdf=gpd.overlay(labels_gdf, tiles_union_df)
-    labels_gdf.drop(columns=['id_temp'], inplace=True)
+    ## Clip labels to the considered tiles to avoid over-selection of tiles
+    # tiles_union_geom=tiles_in_restricted_aoi_4326.unary_union
+    # tiles_union_df=gpd.GeoDataFrame({'id_temp':[x for x in range(len(tiles_union_geom.geoms))],
+    #                                 'geometry':[geo for geo in tiles_union_geom.geoms]})
+    # tiles_union_df.set_crs(crs=tiles_in_restricted_aoi_4326.crs, inplace=True)
+    # labels_gdf=gpd.overlay(labels_gdf, tiles_union_df)
+    # labels_gdf.drop(columns=['id_temp'], inplace=True)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 
@@ -306,7 +307,7 @@ if GENERATE_LABELS:
         print(e)
         sys.exit(1)
 
-    print('Done Generating the labels for the object detector...')
+    print('Done generating the labels for the object detector...')
 
     # In the current case, OTH_labels_gdf should be empty
 
@@ -321,16 +322,18 @@ if DETERMINE_ROAD_SURFACES:
     written_files.append('shapefiles_gpkg/roads_for_OD.shp')
 
 if GENERATE_TILES_INFO:
-    # Save in json format for the (to-be) "old" version of generate_tilesets.py
-    # geojson only supports epsg:4326
-    tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
-    tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+
+    if not (GENERATE_LABELS and OK_TILES) :
+        # Save in json format for the (to-be) "old" version of generate_tilesets.py
+        # geojson only supports epsg:4326
+        tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
+        tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+        written_files.append('json/tiles_aoi.geojson')
 
     # Save in gpkg for the (soon-to-be) new version of generate_tilesets.py
     layername="epsg3857_z" + str(ZOOM_LEVEL) + "_tiles"
     tiles_in_restricted_aoi.to_file(os.path.join(path_shp_gpkg, 'epsg3857_tiles.gpkg'), driver='GPKG',layer=layername)
 
-    written_files.append('json/tiles_aoi.geojson')
     written_files.append(layername + ' in the geopackage shapefiles_gpkg/epsg3857_tiles.gpkg')
 
 if GENERATE_LABELS:
@@ -349,6 +352,10 @@ if GENERATE_LABELS:
             temp=OTH_labels_gdf[OTH_labels_gdf['BELAGSART']==road_type].copy()
             temp.to_file(os.path.join(path_json, f'other_labels_{road_type}.geojson'), driver='GeoJSON')
             written_files.append(f'json/other_labels_{road_type}.geojson')
+
+    if OK_TILES:
+        tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+        written_files.append('json/tiles_aoi.geojson')
 
 print('All done!')
 print('Written files:')
