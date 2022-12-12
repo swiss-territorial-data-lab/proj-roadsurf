@@ -82,12 +82,10 @@ final_metrics.py:
   threshold: 0
   initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  object_detector_folder_100: obj_detector_100
-  object_detector_folder_200: obj_detector_200
+  object_detector_folder: obj_detector
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   input:
-    ground_truth_100: json/ground_truth_labels_100.geojson
-    ground_truth_200: json/ground_truth_labels_200.geojson
+    ground_truth: json/ground_truth_labels.geojson
     to_evaluate:
       trn: trn_predictions.geojson
       val: val_predictions.geojson

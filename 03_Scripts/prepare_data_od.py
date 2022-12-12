@@ -19,6 +19,8 @@ import fct_misc
 with open('03_Scripts/config.yaml') as fp:
     cfg = yaml.load(fp, Loader=yaml.FullLoader)['prepare_data_od.py']    #  [os.path.basename(__file__)]
 
+# Define constants -----------------------------------------
+
 # Task to do
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 GENERATE_TILES_INFO=cfg['tasks']['generate_tiles_info']
@@ -55,6 +57,15 @@ else:
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
 path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
 
+# Define functions --------------------------------------------
+
+def determine_category(row):
+    if row['BELAGSART']==100:
+        return 'artificial'
+    if row['BELAGSART']==200:
+        return 'natural'
+    else:
+        return 'else'
 
 # Information treatment -----------------------------------------------------------------------------------------
 
@@ -238,6 +249,7 @@ if GENERATE_LABELS:
 
     if not GENERATE_TILES_INFO:
         tiles_in_restricted_aoi_4326=gpd.read_file(os.path.join(path_json, 'tiles_aoi.geojson'))
+        tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326[['title','id','geometry']]
     else:
         tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
 
@@ -276,8 +288,8 @@ if GENERATE_LABELS:
     # labels_gdf_no_crs['SUPCATEGORY']='ground'
     # labels_gdf_2056=labels_gdf_no_crs.set_crs(epsg=2056)
     labels_gdf_2056=non_forest_roads.copy()
-    labels_gdf_2056['CATEGORY']='road'
-    labels_gdf_2056['SUPERCATEGORY']='ground'
+    labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
+    labels_gdf_2056['SUPERCATEGORY']='road'
     labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
     labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
 
@@ -293,6 +305,10 @@ if GENERATE_LABELS:
     # labels_gdf.drop(columns=['id_temp'], inplace=True)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
+
+    # Exclude tile with undetermined roads
+    tiles_w_undet_road=GT_labels_gdf[GT_labels_gdf['CATEGORY']=='else']['id'].unique().tolist()
+    GT_labels_gdf = GT_labels_gdf[~GT_labels_gdf['id'].isin(tiles_w_undet_road)]
 
     # the following two lines make sure that no object is counted more than once in case it intersects multiple tiles
     GT_labels_gdf = GT_labels_gdf[labels_gdf.columns]
@@ -340,18 +356,9 @@ if GENERATE_LABELS:
     GT_labels_gdf.to_file(os.path.join(path_json, 'ground_truth_labels.geojson'), driver='GeoJSON')
     written_files.append('json/ground_truth_labels.geojson')
 
-    for road_type in BELAGSART_TO_KEEP:
-        temp=GT_labels_gdf[GT_labels_gdf['BELAGSART']==road_type].copy()
-        temp.to_file(os.path.join(path_json, f'ground_truth_labels_{road_type}.geojson'), driver='GeoJSON')
-        written_files.append(f'json/ground_truth_labels_{road_type}.geojson')
-
     if not OTH_labels_gdf.empty:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append('json/other_labels.geojson')
-        for road_type in BELAGSART_TO_KEEP:
-            temp=OTH_labels_gdf[OTH_labels_gdf['BELAGSART']==road_type].copy()
-            temp.to_file(os.path.join(path_json, f'other_labels_{road_type}.geojson'), driver='GeoJSON')
-            written_files.append(f'json/other_labels_{road_type}.geojson')
 
     if OK_TILES:
         tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')

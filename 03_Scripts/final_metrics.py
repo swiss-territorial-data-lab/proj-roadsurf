@@ -21,11 +21,9 @@ CLASSES=['artificial', 'natural']
 INITIAL_FOLDER=cfg['initial_folder']
 PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
-OD_FOLDER_100=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder_100'])
-OD_FOLDER_200=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder_200'])
+OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
 
-GROUND_TRUTH_100=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth_100'])
-GROUND_TRUTH_200=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth_200'])
+GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 PREDICTIONS=cfg['input']['to_evaluate']
 
 written_files=[]
@@ -78,39 +76,29 @@ def get_balanced_accuracy(comparison_df, CLASSES):
 
     return metrics_df
 
+def get_corresponding_class(row):
+    if row['pred_class']==0:
+        return 'artificial'
+    elif row['pred_class']==1:
+        return 'natural'
+    else:
+        print(f"Unexpected class: {row['pred_class']}")
+        sys.exit(1)
 
 # Importing files ----------------------------------
 print('Importing files...')
 
-ground_truth_100=gpd.read_file(GROUND_TRUTH_100)
-ground_truth_200=gpd.read_file(GROUND_TRUTH_200)
+ground_truth=gpd.read_file(GROUND_TRUTH)
 
-predictions_100=gpd.GeoDataFrame()
+predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():
-    dataset=gpd.read_file(os.path.join(OD_FOLDER_100, dataset_name))
-    predictions_100=pd.concat([predictions_100, dataset], ignore_index=True)
-
-predictions_200=gpd.GeoDataFrame()
-for dataset_name in PREDICTIONS.values():
-    dataset=gpd.read_file(os.path.join(OD_FOLDER_200, dataset_name))
-    predictions_200=pd.concat([predictions_200, dataset], ignore_index=True)
+    dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
+    predictions=pd.concat([predictions, dataset], ignore_index=True)
+predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
 
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'created/quarries.shp'))
 
 # Information treatment ----------------------------
-print('Formatting the data...')
-
-fct_misc.test_crs(ground_truth_100.crs, ground_truth_200.crs)
-ground_truth_100['CATEGORY']="artificial"
-ground_truth_200['CATEGORY']="natural"
-ground_truth=pd.concat([ground_truth_100, ground_truth_200], ignore_index=True)
-ground_truth['SUPERCATEGORY']="road"
-
-predictions_100['CATEGORY']="artificial"
-predictions_200['CATEGORY']="natural"
-predictions=pd.concat([predictions_100, predictions_200], ignore_index=True)
-predictions=predictions[predictions['score']>THRESHOLD].copy()
-
 print('Getting the intersecting area...')
 
 ground_truth_2056=ground_truth.to_crs(epsg=2056)
@@ -144,7 +132,7 @@ for road_id in ground_truth['OBJECTID'].unique().tolist():
 
     intersecting_predictions=predicted_roads_filtered[predicted_roads_filtered['OBJECTID']==road_id].copy()
 
-    groups=intersecting_predictions.groupby(['CATEGORY_2']).sum()
+    groups=intersecting_predictions.groupby(['pred_class_name']).sum()
     if 'natural' in groups.index:
         natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'score']
     else:
