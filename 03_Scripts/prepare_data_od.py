@@ -278,7 +278,14 @@ if GENERATE_LABELS:
 
         else:
             # TODO: generalize the tiles to the correct level or to the level 18 for comparison
-            print('Ok tiles for this zoom not developped yet :(')
+            ok_tiles_z18=gpd.read_file(os.path.join(path_json, 'ok_tiles_aoi_z18_221212.geojson'))
+            if ZOOM_LEVEL>18:
+                tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.sjoin(ok_tiles_z18[['OK', 'geometry']],
+                                                                                how='inner', predicate='within')
+                tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
+                
+            else:
+                print('Ok tiles for this zoom not developped yet :(')
 
     # TODO: do the unary_union, but keep the road types separated 
     # roads_union=non_forest_roads.unary_union
