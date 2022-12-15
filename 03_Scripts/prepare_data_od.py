@@ -214,7 +214,9 @@ if GENERATE_TILES_INFO:
 
     roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART', 'OBJECTID', 'KUNSTBAUTE', 'GDB-Code'], inplace=True)
     
-    bboxes_extent_4326=roi_in_aoi.to_crs(epsg=4326).unary_union.bounds
+    roi_4326=roi_in_aoi.to_crs(epsg=4326)
+    valid_roi_4326=fct_misc.test_valid_geom(roi_4326, correct=True, gdf_obj_name="the roads")
+    bboxes_extent_4326=valid_roi_4326.unary_union.bounds
 
     # cf. https://developmentseed.org/morecantile/usage/
     tms = morecantile.tms.get("WebMercatorQuad")    # epsg:3857

@@ -28,6 +28,8 @@ def test_crs(crs1, crs2 = "EPSG:2056"):
 def ensure_dir_exists(dirpath):
     '''
     Test if a directory exists. If not, make it.
+
+    return: the path to the verified directory.
     '''
 
     if not os.path.exists(dirpath):
@@ -47,6 +49,8 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
     - BANDS: bands of the tile
     - pixel_values: dataframe to which the values for the pixels are going to be concatenated
     - kwargs: additional arguments we would like to pass the dataframe of the pixels
+
+    return: a dataframe with the pixel values on each band and the keyworded arguments.
     '''
     
     # extract the geometry in GeoJSON format
@@ -103,10 +107,13 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
     '''
     Make the difference of the geometry at row p2_idx with the one at the row p1_idx
     
-    - polygons: dataset of polygons
+    - polygons: dataframe of polygons
     - p1_idx: index of the "obstacle" polygon in the dataset
     - p2_idx: index of the final polygon
     - keep_everything: boolean indicating if we should keep large parts that would be eliminated otherwise
+
+    return: a dataframe of the polygons where the part of p1_idx overlapping with p2_idx has been erased. The parts of
+    multipolygons can be all kept or just the largest one (longer process).
     '''
     
     # Store intermediary results back to poly
@@ -119,6 +126,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
         # if a multipolygone is created, only keep the largest part to avoid the following error: https://github.com/geopandas/geopandas/issues/992
         polygons.loc[p2_idx,'geometry'] = max((polygons.loc[p2_idx,'geometry']-polygons.loc[p1_idx,'geometry']).geoms, key=lambda a: a.area)
 
+        # The threshold to which we consider that subparts are still important is hard-coded at 10 units.
         limit=10
         parts_geom=[poly for poly in diff.geoms if poly.area>limit]
         if len(parts_geom)>1 and keep_everything:
@@ -141,10 +149,6 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
                 new_row_dict['Width'].append(new_row_serie.Width)
                 new_row_dict['saved_geom'].append(new_row_serie.saved_geom)
 
-                # polygons.loc[len_df, 'OBJECTID']=int(str(int(polygons.loc[len_df, 'OBJECTID'])) + 
-                #                                 str(polygons.loc[len_df, 'geometry']).lstrip('POLYGON ((').rstrip('))').strip().split(', ')[0].split()[0].split('.')[0] +
-                #                                 str(polygons.loc[len_df, 'geometry']).lstrip('POLYGON ((').rstrip('))').strip().split(', ')[0].split()[0].split('.')[1])
-
                 new_poly+=1
 
             polygons=pd.concat([polygons, pd.DataFrame(new_row_dict)], ignore_index=True)
@@ -154,12 +158,14 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
 
 def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
     '''
-    Test if all the geometry of a dataset are valid. When it is not the case, correct the geometries with a buffer of 0 m if correct != False
-    and stop with an error otherwise.
+    Test if all the geometry of a dataset are valid. When it is not the case, correct the geometries with a buffer of 0 m
+    if correct != False and stop with an error otherwise.
 
     - poly_gdf: dataframe of geometries to check
     - correct: boolean indicating if the invalid geometries should be corrected with a buffer of 0 m
     - gdf_boj_name: name of the dataframe of the object in it to print with the error message
+
+    return: a dataframe with only valid geometries.
     '''
 
     try:

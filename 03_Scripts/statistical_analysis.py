@@ -479,7 +479,7 @@ if __name__ == "__main__":
         features = BANDS_STR + bands_ratio + ['road_width']
         to_describe='road_type'
 
-        written_files_pca_pixels=fs.calculate_pca(pixels_per_band, features, to_describe,
+        written_files_pca_pixels=fs.pca_procedure(pixels_per_band, features, to_describe,
                     dirpath_f_tables, dirpath_f_images, 
                     file_prefix=f'{balance}PCA_pixels_',
                     title_graph='PCA for the values of the pixels on each band')
@@ -496,7 +496,7 @@ if __name__ == "__main__":
 
             to_describe='road_type'
 
-            written_files_pca_stats=fs.calculate_pca(roads_stats_filtered, features, to_describe,
+            written_files_pca_stats=fs.pca_procedure(roads_stats_filtered, features, to_describe,
                     dirpath_f_tables, dirpath_f_images, 
                     file_prefix=f'{balance}PCA_stats_band_{band}_',
                     title_graph=f'PCA of the statistics of the roads on the {band} band')

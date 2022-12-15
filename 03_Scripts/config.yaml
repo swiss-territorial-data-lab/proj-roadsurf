@@ -1,8 +1,8 @@
 prepare_data.py:
   debug_mode: false
   tasks:
-    determine_roads_surfaces: false
-    determine_restricted_AOI: false
+    determine_roads_surfaces: true
+    determine_restricted_AOI: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
     input_files:
@@ -18,7 +18,7 @@ prepare_data_od.py:
   tasks:
     determine_roads_surfaces: false
     generate_tiles_info: true
-    generate_labels: true
+    generate_labels: false
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
     input_files:
@@ -27,7 +27,7 @@ prepare_data_od.py:
       forests: /TLM/Clip_Wald_Bodenbedeckung/forests.shp
       aoi: /AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  ok_tiles: /tables/ok_tiles_z18.xlsx
+  # ok_tiles: /tables/ok_tiles_z18.xlsx
   zoom_level: 18  # keep between 17 and 20  
 
 
@@ -57,7 +57,7 @@ statistical_analysis.py:
     input_files:
       images: /obj_detector/all-images
       roads: /shapefiles_gpkg/roads_polygons.shp
-      tiles: /json/tiles_aoi.geojson
+      tiles: /json/tiles_aoi_z18.geojson
   final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
   param:
     pixel_threshold: 10
@@ -65,6 +65,7 @@ statistical_analysis.py:
     make_boxplots: true
     do_ks_test: false
     make_pca: true
+
 
 limit_visible_aoi.py:
   data_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
@@ -76,6 +77,7 @@ limit_visible_aoi.py:
   output:
     images: processed/obj_detector/all-images-limited-aoi
   zoom: 18
+
 
 final_metrics.py:
   debug_mode: True
