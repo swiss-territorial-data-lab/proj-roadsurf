@@ -16,9 +16,9 @@ prepare_data.py:
 prepare_data_od.py:
   debug_mode: false
   tasks:
-    determine_roads_surfaces: false
-    generate_tiles_info: true
-    generate_labels: false
+    determine_roads_surfaces: true
+    generate_tiles_info: false
+    generate_labels: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
     input_files:

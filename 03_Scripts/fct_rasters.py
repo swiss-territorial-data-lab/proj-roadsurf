@@ -123,15 +123,14 @@ if __name__ == '__main__':
     INITIAL_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial/DEM"
     PROCESSED_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed"
     DEM_PROCESSED_FOLDER=fct_misc.ensure_dir_exists("/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/DEM")
+    FINAL_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final"
 
     URL_FILE="ch.swisstopo.swissalti3d-nZXjr9Tu_res2m.csv"
-    GT_POLYGONS="json/ground_truth_labels.geojson"
-    OTH_POLYGONS="json/other_labels.geojson"
-    
+    ROADS_POLYGONS="shp_gpkg/types_from_detections.shp"
 
-    files_url=pd.read_csv(os.path.join(INITIAL_FOLDER, URL_FILE), header=None)
 
     if GENERATE_MOSAIC:
+        files_url=pd.read_csv(os.path.join(INITIAL_FOLDER, URL_FILE), header=None)
         filenames=download_tiles(files_url[0].unique().tolist(), INITIAL_FOLDER)
 
         print('Generating the mosaic from tiles...')
@@ -152,17 +151,16 @@ if __name__ == '__main__':
             affine=src.transform
             dem_crs=src.crs
 
-        gt_labels=gpd.read_file(os.path.join(PROCESSED_FOLDER, GT_POLYGONS))
-        oth_labels=gpd.read_file(os.path.join(PROCESSED_FOLDER, OTH_POLYGONS))
-
-        labels=pd.concat([gt_labels, oth_labels], axis=0).reset_index(drop=True)
+        labels=gpd.read_file(os.path.join(FINAL_FOLDER, ROADS_POLYGONS))
 
         print('-- Calculating zonal stats...')
         
+        labels.reset_index(drop=True, inplace=True)
         labels.to_crs(crs=dem_crs, inplace=True)
         fct_misc.test_crs(dem_crs, labels)
 
-        zs_df=pd.DataFrame(zonal_stats(labels, dem_array, affine=affine, stats=['min', 'max', 'mean', 'median', 'std'], nodata=-9999))
+        zs_df=pd.DataFrame(zonal_stats(labels, dem_array, affine=affine,
+                                        stats=['min', 'max', 'mean', 'median', 'std'], nodata=-9999))
         zs_roads=pd.concat([labels, zs_df], axis=1)
         
         print('-- Exporting file...')

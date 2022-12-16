@@ -103,6 +103,8 @@ if DETERMINE_ROAD_SURFACES:
 
     print('Determining the surface of the roads from lines...')
 
+    uncovered_roads['road_len']=round(uncovered_roads.length,3)
+
     # Buffer the roads
     print('-- Buffering the roads...')
 
