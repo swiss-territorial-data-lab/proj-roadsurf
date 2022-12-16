@@ -105,7 +105,6 @@ ground_truth_2056=ground_truth.to_crs(epsg=2056)
 ground_truth_2056['area_label']=ground_truth_2056.area
 
 predictions_2056=predictions.to_crs(epsg=2056)
-predictions_2056['area_predictions']=predictions_2056.area
 
 fct_misc.test_crs(ground_truth_2056.crs, predictions_2056.crs)
 predicted_roads_2056=gpd.overlay(ground_truth_2056, predictions_2056, how='intersection')
@@ -113,12 +112,13 @@ predicted_roads_2056=gpd.overlay(ground_truth_2056, predictions_2056, how='inter
 predicted_roads_filtered=predicted_roads_2056[(~predicted_roads_2056['OBJECTID'].isna()) &
                                             (~predicted_roads_2056['score'].isna())].copy()
 predicted_roads_filtered['joined_area']=predicted_roads_filtered.area
-predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label']*100, 2)
+predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label'], 2)
 predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_in_label']*predicted_roads_filtered['score']
+
 
 print('Caclulating the indexes...')
 
-final_type={'road_id':[], 'road_type':[], 'natural_score':[], 'artificial_score':[]}
+final_type={'road_id':[], 'road_type':[], 'nat_score':[], 'art_score':[]}
 detected_roads_id=predicted_roads_filtered['OBJECTID'].unique().tolist()
 
 for road_id in ground_truth['OBJECTID'].unique().tolist():
@@ -126,23 +126,32 @@ for road_id in ground_truth['OBJECTID'].unique().tolist():
     if road_id not in detected_roads_id:
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('undetermined')
-        final_type['natural_score'].append(0)
-        final_type['artificial_score'].append(0)
+        final_type['nat_score'].append(0)
+        final_type['art_score'].append(0)
         continue
 
     intersecting_predictions=predicted_roads_filtered[predicted_roads_filtered['OBJECTID']==road_id].copy()
 
     groups=intersecting_predictions.groupby(['pred_class_name']).sum()
     if 'natural' in groups.index:
-        natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'score']
+        if groups.loc['natural', 'weighted_score']==0:
+            natural_index=0
+        else:
+            natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'area_pred_in_label']
     else:
         natural_index=0
     if 'artificial' in groups.index:
-        artificial_index=groups.loc['artificial', 'weighted_score']/groups.loc['artificial', 'score']
+        if groups.loc['artificial', 'weighted_score']==0:
+            artificial_index=0
+        else:
+            artificial_index=groups.loc['artificial', 'weighted_score']/groups.loc['artificial', 'area_pred_in_label']
     else:
         artificial_index=0
 
-    if artificial_index >= natural_index:
+    if artificial_index==natural_index:
+        final_type['road_id'].append(road_id)
+        final_type['road_type'].append('undetermined')
+    elif artificial_index > natural_index:
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('artificial')
     elif artificial_index < natural_index:
@@ -152,8 +161,8 @@ for road_id in ground_truth['OBJECTID'].unique().tolist():
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('undetermined')
 
-    final_type['artificial_score'].append(artificial_index)
-    final_type['natural_score'].append(natural_index)
+    final_type['art_score'].append(round(artificial_index,3))
+    final_type['nat_score'].append(round(natural_index, 3))
 
 final_type_df=pd.DataFrame(final_type)
 
