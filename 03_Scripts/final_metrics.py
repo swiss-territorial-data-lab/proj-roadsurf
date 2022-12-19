@@ -15,7 +15,8 @@ with open('03_Scripts/config.yaml') as fp:
 # Define constants ------------------------------------
 
 DEBUG_MODE=cfg['debug_mode']
-THRESHOLD=cfg['threshold']
+THRESHOLD_SCORE=cfg['threshold_score']
+THRESHOLD_DIFF=cfg['threshold_diff']
 CLASSES=['artificial', 'natural']
 
 INITIAL_FOLDER=cfg['initial_folder']
@@ -25,6 +26,7 @@ OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
 
 GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 PREDICTIONS=cfg['input']['to_evaluate']
+CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
 
 written_files=[]
 
@@ -71,7 +73,7 @@ def get_balanced_accuracy(comparison_df, CLASSES):
     else:
         f1_score=round(2*precision*recall/(precision + recall), 2)
 
-    print(f"The final F1-score for a threshold of {THRESHOLD} is {f1_score}", 
+    print(f"The final F1-score for a threshold of {THRESHOLD_SCORE} is {f1_score}", 
         f" with a precision of {round(precision,2)} and a recall of {round(recall,2)}.")
 
     return metrics_df
@@ -95,13 +97,26 @@ for dataset_name in PREDICTIONS.values():
     dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
+predictions=predictions[predictions['score']>THRESHOLD_SCORE].copy()
+
+considered_tiles=gpd.read_file(CONSIDERED_TILES)
 
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'created/quarries.shp'))
 
 # Information treatment ----------------------------
+print('Limiting the labels to the visible area...')
+tiles_union=considered_tiles['geometry'].unary_union
+considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_union.geoms))],
+                                'geometry': [geo for geo in tiles_union.geoms]},
+                                crs=4326
+                                )
+
+fct_misc.test_crs(considered_zone.crs, ground_truth)
+visible_ground_truth=gpd.overlay(ground_truth, considered_zone, how="intersection")
+
 print('Getting the intersecting area...')
 
-ground_truth_2056=ground_truth.to_crs(epsg=2056)
+ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
 ground_truth_2056['area_label']=ground_truth_2056.area
 
 predictions_2056=predictions.to_crs(epsg=2056)
@@ -118,16 +133,17 @@ predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_i
 
 print('Caclulating the indexes...')
 
-final_type={'road_id':[], 'road_type':[], 'nat_score':[], 'art_score':[]}
+final_type={'road_id':[], 'road_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
 detected_roads_id=predicted_roads_filtered['OBJECTID'].unique().tolist()
 
 for road_id in ground_truth['OBJECTID'].unique().tolist():
 
     if road_id not in detected_roads_id:
         final_type['road_id'].append(road_id)
-        final_type['road_type'].append('undetermined')
+        final_type['road_type'].append('undetected')
         final_type['nat_score'].append(0)
         final_type['art_score'].append(0)
+        final_type['diff_score'].append(0)
         continue
 
     intersecting_predictions=predicted_roads_filtered[predicted_roads_filtered['OBJECTID']==road_id].copy()
@@ -151,23 +167,23 @@ for road_id in ground_truth['OBJECTID'].unique().tolist():
     if artificial_index==natural_index:
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('undetermined')
+        final_type['diff_score'].append(0)
     elif artificial_index > natural_index:
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('artificial')
+        final_type['diff_score'].append(abs(artificial_index-natural_index))
     elif artificial_index < natural_index:
         final_type['road_id'].append(road_id)
         final_type['road_type'].append('natural')
-    else:
-        final_type['road_id'].append(road_id)
-        final_type['road_type'].append('undetermined')
+        final_type['diff_score'].append(abs(artificial_index-natural_index))
 
     final_type['art_score'].append(round(artificial_index,3))
     final_type['nat_score'].append(round(natural_index, 3))
 
 final_type_df=pd.DataFrame(final_type)
 
-comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY']], how='inner',
-                            left_on='road_id', right_on='OBJECTID'))
+comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY', 'road_len']],
+                                how='inner', left_on='road_id', right_on='OBJECTID'))
 try:
     comparison_df.shape[0]==ground_truth.shape[0], "There are to many or not enough labels in the final results"
 except Exception as e:
@@ -179,7 +195,7 @@ for road in comparison_df.itertuples():
     pred_class=road.road_type
     gt_class=road.CATEGORY
 
-    if pred_class=='undetermined':
+    if pred_class=='undetermined' or pred_class=='undetected':
         tags.append('FN')
     elif pred_class==gt_class:
         tags.append('TP')
@@ -196,35 +212,36 @@ print('Calculating the metrics...')
 
 print('-- Calculating the accuracy...')
 
-per_right_roads=round(comparison_df[comparison_df['CATEGORY']==comparison_df['road_type']].shape[0]/comparison_df.shape[0]*100,2)
-per_missing_roads=round(comparison_df[comparison_df['road_type']=='undetermined'].shape[0]/comparison_df.shape[0]*100,2)
-per_wrong_roads=round(100-per_right_roads-per_missing_roads,2)
+per_right_roads=comparison_df[comparison_df['CATEGORY']==comparison_df['road_type']].shape[0]/comparison_df.shape[0]*100
+per_missing_roads=comparison_df[comparison_df['road_type']=='undetected'].shape[0]/comparison_df.shape[0]*100
+per_undeter_roads=comparison_df[comparison_df['road_type']=='undetermined'].shape[0]/comparison_df.shape[0]*100
+per_wrong_roads=round(100-per_right_roads-per_missing_roads-per_undeter_roads,2)
 
-print(f"{per_right_roads}% of the roads were found and have the correct road type.")
-
-print(f"{per_missing_roads}% of the roads were not found.")
+print(f"{round(per_right_roads,2)}% of the roads were found and have the correct road type.")
+print(f"{round(per_undeter_roads,2)} of the roads were detected, but have an undetermined road type.")
+print(f"{round(per_missing_roads,2)}% of the roads were not found.")
 print(f"{per_wrong_roads}% of the roads had the wrong road type.")
 
-per_missing_roads_100=round(comparison_df[
-                                        (comparison_df['road_type']=='undetermined') &
+for road_type in ['undetected', 'undetermined']:
+    print('\n')
+    per_type_roads_100=round(comparison_df[
+                                        (comparison_df['road_type']==road_type) &
                                         (comparison_df['CATEGORY']=='artificial')
                                         ].shape[0]/comparison_df.shape[0]*100,2)
 
-per_missing_roads_200=round(comparison_df[
-                                        (comparison_df['road_type']=='undetermined') &
+    per_type_roads_200=round(comparison_df[
+                                        (comparison_df['road_type']==road_type) &
                                         (comparison_df['CATEGORY']=='natural')
                                         ].shape[0]/comparison_df.shape[0]*100,2)
 
-print(f"{per_missing_roads_100}% of the roads are missing and have the artificial type")
-print(f"{per_missing_roads_200}% of the roads are missing and have the natural type")
+    print(f"{per_type_roads_100}% of the roads are {road_type} and have the artificial type")
+    print(f"{per_type_roads_200}% of the roads are {road_type} and have the natural type")
 
-
+print('\n')
 print('-- Calculating the macro balanced weighted accuracy...')
 metrics=get_balanced_accuracy(comparison_df, CLASSES)
 
-
-# Only roads smaller than 4 m are naturals
-
+print('\n')
 
 # Roads in quarries are always naturals
 print('Checking for roads in quarries...')
@@ -241,6 +258,19 @@ for road_id in roads_in_quarries['OBJECTID'].unique().tolist():
 
 metrics_post_quarries=get_balanced_accuracy(comp_df_quarries, CLASSES)
 
+print('\n')
+
+# Filters from data exploration
+print('Applying filters from data exploration...')
+comp_df_quarries.loc[comp_df_quarries['diff_score']<=THRESHOLD_DIFF, 'road_type']='undetermined'
+
+
+comp_df_quarries.loc[comp_df_quarries['road_len']>1300, 'road_type']='artificial'
+
+metrics_post_len=get_balanced_accuracy(comp_df_quarries, CLASSES)
+
+print('\n')
+
 # All the undetermined are artificial
 print('Considering all the undetermined roads as artifical roads...')
 comp_df_max_art=comp_df_quarries.copy()
@@ -250,6 +280,7 @@ metrics_mar_art=get_balanced_accuracy(comp_df_max_art, CLASSES)
 
 # If all roads where classified as artificial
 if False:
+    print('\n')
     print('If all roads were classified as artificial...')
     comp_df_all_art=comparison_df.copy()
     comp_df_all_art['road_type']='artificial'
