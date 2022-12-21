@@ -187,8 +187,13 @@ if DETERMINE_ROAD_SURFACES:
 if GENERATE_TILES_INFO or GENERATE_LABELS:
 
     if not DETERMINE_ROAD_SURFACES:
+        ROADS_FOR_LABELS=cfg['processed_input']['roads_for_labels']
+
         print('Importing files...')
-        non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, 'roads_for_OD.shp'))
+        if 'layer' in cfg['processed_input'].keys():
+            non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, ROADS_FOR_LABELS), layer=cfg['processed_input']['layer'])
+        else:
+            non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, ROADS_FOR_LABELS))
         roads_parameters=pd.read_excel(ROADS_PARAM)
 
 if GENERATE_TILES_INFO:
@@ -203,8 +208,12 @@ if GENERATE_TILES_INFO:
     roads_of_interest=roads_of_interest[roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
 
 
-    aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=2056)
-    fct_misc.test_crs(roads_of_interest.crs, aoi_geom.crs)
+    aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=aoi.crs)
+
+    try:
+        assert(aoi_geom.crs==roads_of_interest.crs)
+    except Exception:
+        aoi_geom.to_crs(crs=roads_of_interest.crs, inplace=True)
     roi_in_aoi=roads_of_interest.overlay(aoi_geom, how='intersection')
 
     del roads_parameters, roads_parameters_filtered, roads_of_interest
