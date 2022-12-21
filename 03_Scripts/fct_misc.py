@@ -170,7 +170,7 @@ def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
 
     try:
         assert(poly_gdf[poly_gdf.is_valid==False].shape[0]==0), \
-              f"{poly_gdf[poly_gdf.is_valid==False].shape[0]} geometries are invalid{f' among {gdf_obj_name}' if gdf_obj_name else ''}."
+            f"{poly_gdf[poly_gdf.is_valid==False].shape[0]} geometries are invalid {f' among the {gdf_obj_name}' if gdf_obj_name else ''}."
     except Exception as e:
         print(e)
         if correct:
@@ -182,5 +182,7 @@ def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
             return corrected_poly
         else:
             sys.exit(1)
+
+    print(f"There aren't any invalid geometries{f' among the {gdf_obj_name}' if gdf_obj_name else ''}.")
 
     return poly_gdf

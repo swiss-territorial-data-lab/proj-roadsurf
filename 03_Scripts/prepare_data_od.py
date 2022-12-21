@@ -281,7 +281,6 @@ if GENERATE_LABELS:
             print(f"{per_ok_tiles}% of the verified tiles were are ok.")
 
         else:
-            # TODO: generalize the tiles to the correct level or to the level 18 for comparison
             ok_tiles_z18=gpd.read_file(os.path.join(path_json, 'ok_tiles_aoi_z18_221212.geojson'))
             if ZOOM_LEVEL>18:
                 tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.sjoin(ok_tiles_z18[['OK', 'geometry']],
@@ -289,15 +288,9 @@ if GENERATE_LABELS:
                 tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
                 
             else:
+                # TODO: generalize the tiles to the correct level or to the level 18 for comparison
                 print('Ok tiles for this zoom not developped yet :(')
 
-    # TODO: do the unary_union, but keep the road types separated 
-    # roads_union=non_forest_roads.unary_union
-    # labels_gdf_no_crs = gpd.GeoDataFrame({'id_labels':[x for x in range(len(roads_union.geoms))],
-    #                                         'geometry':[geo for geo in roads_union.geoms]})
-    # labels_gdf_no_crs['CATEGORY']='road'
-    # labels_gdf_no_crs['SUPCATEGORY']='ground'
-    # labels_gdf_2056=labels_gdf_no_crs.set_crs(epsg=2056)
     labels_gdf_2056=non_forest_roads.copy()
     labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
     labels_gdf_2056['SUPERCATEGORY']='road'
@@ -307,13 +300,6 @@ if GENERATE_LABELS:
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
     print('Labels on tiles...')
-    ## Clip labels to the considered tiles to avoid over-selection of tiles
-    # tiles_union_geom=tiles_in_restricted_aoi_4326.unary_union
-    # tiles_union_df=gpd.GeoDataFrame({'id_temp':[x for x in range(len(tiles_union_geom.geoms))],
-    #                                 'geometry':[geo for geo in tiles_union_geom.geoms]})
-    # tiles_union_df.set_crs(crs=tiles_in_restricted_aoi_4326.crs, inplace=True)
-    # labels_gdf=gpd.overlay(labels_gdf, tiles_union_df)
-    # labels_gdf.drop(columns=['id_temp'], inplace=True)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 
