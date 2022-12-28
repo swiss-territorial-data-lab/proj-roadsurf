@@ -5,6 +5,7 @@ import logging, argparse
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+import plotly.graph_objects as go
 
 from tqdm import tqdm
 
@@ -23,11 +24,12 @@ CLASSES=['artificial', 'natural']
 INITIAL_FOLDER=cfg['initial_folder']
 PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
-OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
+# OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
 
 GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 PREDICTIONS=cfg['input']['to_evaluate']
-CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
+# CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
+CONSIDERED_TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['considered_tiles'])
 
 written_files=[]
 
@@ -45,9 +47,9 @@ def get_balanced_accuracy(comparison_df, CLASSES):
     '''
 
 
-    metrics_dict={'class':[], 'TP':[], 'FP':[], 'FN':[], 'Pk':[], 'Rk':[], 'count':[]}
+    metrics_dict={'cover_class':[], 'TP':[], 'FP':[], 'FN':[], 'Pk':[], 'Rk':[], 'count':[]}
     for road_type in CLASSES:
-        metrics_dict['class'].append(road_type)
+        metrics_dict['cover_class'].append(road_type)
         tp=comparison_df[(comparison_df['CATEGORY']==comparison_df['road_type']) &
                         (comparison_df['CATEGORY']==road_type)].shape[0]
         fp=comparison_df[(comparison_df['CATEGORY']!=comparison_df['road_type']) &
@@ -82,8 +84,7 @@ def get_balanced_accuracy(comparison_df, CLASSES):
         f1_score=0
     else:
         f1_score=round(2*precision*recall/(precision + recall), 2)
-
-    global_metrics_df=pd.DataFrame({'P': precision, 'R': recall, 'F1-score': f1_score})
+    global_metrics_df=pd.DataFrame({'precision': [precision], 'recall': [recall], 'f1_score': [f1_score]})
 
     return metrics_df, global_metrics_df
 
@@ -103,16 +104,19 @@ ground_truth=gpd.read_file(GROUND_TRUTH)
 
 predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():
-    dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
+    # dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
+    dataset=gpd.read_file(os.path.join(PROCESSED_FOLDER, dataset_name))
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
+predictions.drop(columns=['pred_class'], inplace=True)
+del dataset
 
 considered_tiles=gpd.read_file(CONSIDERED_TILES)
 
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'created/quarries.shp'))
 
 # Information treatment ----------------------------
-print('Limiting the labels to the visible area...')
+print('Limiting the labels to the visible area of labels and predictions...')
 
 tiles_union=considered_tiles['geometry'].unary_union
 considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_union.geoms))],
@@ -122,6 +126,8 @@ considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_
 
 fct_misc.test_crs(considered_zone.crs, ground_truth)
 visible_ground_truth=gpd.overlay(ground_truth, considered_zone, how="intersection")
+
+del considered_tiles, tiles_union, considered_zone, 
 
 print('Getting the intersecting area...')
 
@@ -139,6 +145,7 @@ predicted_roads_filtered['joined_area']=predicted_roads_filtered.area
 predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label'], 2)
 predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_in_label']*predicted_roads_filtered['score']
 
+del visible_ground_truth, ground_truth_2056, predictions_2056
 
 print('Calculating the indexes and the metrics per threshold for the score of the predictions...')
 
@@ -201,7 +208,7 @@ for threshold in thresholds:
 
     final_type_df=pd.DataFrame(final_type)
 
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY', 'road_len']],
+    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY']],
                                     how='inner', left_on='road_id', right_on='OBJECTID'))
     try:
         assert(comparison_df.shape[0]==ground_truth.shape[0]), "There are too many or not enough labels in the final results"
@@ -232,41 +239,52 @@ for threshold in thresholds:
 
     if threshold==0:
         all_preds_comparison_df=comparison_df
-        max_f1=part_global_metrics.f1_score
+
         best_threshold=0
-
-        for metric in part_metrics_by_class.itertuples():
-            print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-                f" and a recall of {round(metric.rk, 2)}")
-
-        print(f"The final F1-score for a threshold of 0 is {part_global_metrics.f1_score}", 
-            f" with a precision of {round(part_global_metrics.precision,2)} and a recall of",
-            f" {round(part_global_metrics.recall,2)}.")
-
-    elif part_global_metrics.f1_score>max_f1:
-        best_threshold=threshold
         best_comparison_df=comparison_df
-        max_f1=part_global_metrics.f1_score
+        max_f1=part_global_metrics.f1_score[0]
         
         best_by_class_metrics=part_metrics_by_class
         best_global_metrics=part_global_metrics
 
+        print('\n')
+        for metric in part_metrics_by_class.itertuples():
+            print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+                f" and a recall of {round(metric.Rk, 2)}")
+
+        print(f"The final F1-score for a threshold of 0 is {part_global_metrics.f1_score[0]}", 
+            f" with a precision of {round(part_global_metrics.precision[0],2)} and a recall of",
+            f" {round(part_global_metrics.recall[0],2)}.")
+
+    elif (part_global_metrics.f1_score>max_f1)[0]:
+        best_threshold=threshold
+        best_comparison_df=comparison_df
+        max_f1=part_global_metrics.f1_score[0]
+        
+        best_by_class_metrics=part_metrics_by_class
+        best_global_metrics=part_global_metrics
+
+        print('\n')
         print(f"The best threshold for the f1-score is now {best_threshold}.")
+
+    # else:
+    #     print(part_global_metrics.f1_score[0])
 
     tqdm_log.update(1)
 
 tqdm_log.close()
 
+print('\n')
 # print(f"The best threshold for the f1-score is at {best_threshold}.")
 print(f"For a threshold of {best_threshold}...")
 
 for metric in best_by_class_metrics.itertuples():
-    print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-        f" and a recall of {round(metric.rk, 2)}")
+    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+        f" and a recall of {round(metric.Rk, 2)}")
 
-print(f"The final F1-score is {best_global_metrics.f1_score}", 
-    f" with a precision of {round(best_global_metrics.precision,2)}", 
-    f" and a recall of {round(best_global_metrics.recall,2)}.")
+print(f"The final F1-score is {best_global_metrics.f1_score[0]}", 
+    f" with a precision of {round(best_global_metrics.precision[0],2)}", 
+    f" and a recall of {round(best_global_metrics.recall[0],2)}.")
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 filename='types_from_detections.shp'
@@ -317,7 +335,8 @@ tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-    filtered_results=best_comparison_df[best_comparison_df['diff_score']>=threshold].copy()
+    filtered_results=best_comparison_df.copy()
+    filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_class']='undetermined'
     part_metrics_by_class, part_global_metrics = get_balanced_accuracy(filtered_results, CLASSES)
 
     part_metrics_by_class['threshold']=threshold
@@ -327,33 +346,38 @@ for threshold in thresholds:
     filtered_global_metrics=pd.concat([filtered_global_metrics, part_global_metrics], ignore_index=True)
 
     if threshold==0:
-        max_f1=part_global_metrics.f1_score
         best_filtered_threshold=0
-
-    elif part_global_metrics.f1_score>max_f1:
-        best_filtered_threshold=threshold
         best_filtered_results=filtered_results
-        max_f1=part_global_metrics.f1_score
+        max_f1=part_global_metrics.f1_score[0]
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
 
+    elif (part_global_metrics.f1_score>max_f1)[0]:
+        best_filtered_threshold=threshold
+        best_filtered_results=filtered_results
+        max_f1=part_global_metrics.f1_score[0]
+        
+        best_by_class_filtered_metrics=part_metrics_by_class
+        best_global_filtered_metrics=part_global_metrics
+        print('\n')
         print(f"The best threshold of the difference of indices for the f1-score is now {best_filtered_threshold}.")
 
     tqdm_log.update(1)
 
 tqdm_log.close()
 
+print('\n')
 # print(f"The best threshold for the f1-score is at {best_threshold}.")
 print(f"For a threshold of the difference of indices of {best_filtered_threshold}...")
 
 for metric in best_by_class_filtered_metrics.itertuples():
-    print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-        f" and a recall of {round(metric.rk, 2)}")
+    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+        f" and a recall of {round(metric.Rk, 2)}")
 
-print(f"The final F1-score is {best_global_filtered_metrics.f1_score}", 
-    f" with a precision of {round(best_global_filtered_metrics.precision,2)}", 
-    f" and a recall of {round(best_global_filtered_metrics.recall,2)}.")
+print(f"The final F1-score is {best_global_filtered_metrics.f1_score[0]}", 
+    f" with a precision of {round(best_global_filtered_metrics.precision[0],2)}", 
+    f" and a recall of {round(best_global_filtered_metrics.recall[0],2)}.")
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 filename='filtered_types_from_detections.shp'
@@ -364,7 +388,7 @@ filename='filtered_types_from_all_detections.shp'
 all_preds_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
 written_files.append('final/shp_gpkg/' + filename)
 
-print('/n')
+print('\n')
 
 # Roads in quarries are always naturals
 print('Checking for roads in quarries...')
@@ -384,12 +408,12 @@ class_metrics_post_quarries, global_metrics_post_quarries=get_balanced_accuracy(
 print(f"For a threshold of {best_threshold}...")
 
 for metric in class_metrics_post_quarries.itertuples():
-    print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-        f" and a recall of {round(metric.rk, 2)}")
+    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+        f" and a recall of {round(metric.Rk, 2)}")
 
-print(f"The final F1-score is {global_metrics_post_quarries.f1_score}", 
-    f" with a precision of {round(global_metrics_post_quarries.precision,2)}", 
-    f" and a recall of {round(global_metrics_post_quarries.recall,2)}.")
+print(f"The final F1-score is {global_metrics_post_quarries.f1_score[0]}", 
+    f" with a precision of {round(global_metrics_post_quarries.precision[0],2)}", 
+    f" and a recall of {round(global_metrics_post_quarries.recall[0],2)}.")
 
 print('\n')
 
@@ -400,17 +424,17 @@ comp_df_explo=comp_df_quarries.copy()
 comp_df_explo.loc[comp_df_quarries['diff_score']<=0.06, 'road_type']='undetermined'
 
 
-comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'road_type']='artificial'
+# comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'road_type']='artificial'
 
 class_metrics_post_explo, global_metrics_post_explo=get_balanced_accuracy(comp_df_explo, CLASSES)
 
 for metric in class_metrics_post_explo.itertuples():
-    print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-        f" and a recall of {round(metric.rk, 2)}")
+    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+        f" and a recall of {round(metric.Rk, 2)}")
 
-print(f"The final F1-score is {global_metrics_post_explo.f1_score}", 
-    f" with a precision of {round(global_metrics_post_explo.precision,2)}", 
-    f" and a recall of {round(global_metrics_post_explo.recall,2)}.")
+print(f"The final F1-score is {global_metrics_post_explo.f1_score[0]}", 
+    f" with a precision of {round(global_metrics_post_explo.precision[0],2)}", 
+    f" and a recall of {round(global_metrics_post_explo.recall[0],2)}.")
 
 print('\n')
 
@@ -424,12 +448,112 @@ if False:
     class_metrics_all_art, global_metrics_all_art=get_balanced_accuracy(comp_df_all_art, CLASSES)
 
     for metric in class_metrics_all_art.itertuples():
-        print(f"The {metric.road_type} roads have a precision of {round(metric.pk, 2)}",
-            f" and a recall of {round(metric.rk, 2)}")
+        print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+            f" and a recall of {round(metric.Rk, 2)}")
 
-    print(f"The final F1-score is {global_metrics_all_art.f1_score}", 
-        f" with a precision of {round(global_metrics_all_art.precision,2)}", 
-        f" and a recall of {round(global_metrics_all_art.recall,2)}.")
+    print(f"The final F1-score is {global_metrics_all_art.f1_score[0]}", 
+        f" with a precision of {round(global_metrics_all_art.precision[0],2)}", 
+        f" and a recall of {round(global_metrics_all_art.recall[0],2)}.")
+
+# Make the graphs
+# Code strongly inspired from the script 'assess_predictions.py' in the object detector.
+print('Make some graphs for the visualization of the impact from the thresholds...')
+images_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
+
+fig = go.Figure()
+fig_k = go.Figure()
+
+# Plot of the precision vs recall
+fig.add_trace(
+    go.Scatter(
+        x=all_global_metrics['recall'],
+        y=all_global_metrics['precision'],
+        mode='markers+lines',
+        text=all_global_metrics['threshold'],
+    )
+)
+
+fig.update_layout(
+    xaxis_title="Recall",
+    yaxis_title="Precision",
+    xaxis=dict(range=[0., 1]),
+    yaxis=dict(range=[0., 1])
+)
+
+file_to_write = os.path.join(images_folder, 'precision_vs_recall.html')
+fig.write_html(file_to_write)
+written_files.append(file_to_write)
+
+if len(CLASSES)>1:
+    for id_cl in CLASSES:
+
+        fig_k.add_trace(
+            go.Scatter(
+                x=all_metrics_by_class['Rk'][all_metrics_by_class['cover_class']==id_cl],
+                y=all_metrics_by_class['Pk'][all_metrics_by_class['cover_class']==id_cl],
+                mode='markers+lines',
+                text=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
+                name=str(id_cl) + ' roads'
+            )
+        )
+
+    fig_k.update_layout(
+        xaxis_title="Recall",
+        yaxis_title="Precision",
+        xaxis=dict(range=[0., 1]),
+        yaxis=dict(range=[0., 1])
+    )
+
+    file_to_write = os.path.join(images_folder, 'precision_vs_recall_dep_on_class.html')
+    fig_k.write_html(file_to_write)
+    written_files.append(file_to_write)
+
+# Plot the number of TP, FN, and FPs
+fig = go.Figure()
+
+for id_cl in CLASSES:
+    
+    for y in ['TP', 'FN', 'FP']:
+
+        fig.add_trace(
+            go.Scatter(
+                x=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
+                y=all_metrics_by_class[y][all_metrics_by_class['cover_class']==id_cl],
+                mode='markers+lines',
+                name=y[0:2]+'_'+str(id_cl)
+            )
+        )
+
+    fig.update_layout(xaxis_title="threshold", yaxis_title="#")
+    
+if len(CLASSES)>1:
+    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_dep_on_class.html')
+
+else:
+    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold.html')
+
+fig.write_html(file_to_write)
+written_files.append(file_to_write)
+
+# Plot the metrics vs thresholds
+fig = go.Figure()
+
+for y in ['precision', 'recall', 'f1_score']:
+
+    fig.add_trace(
+        go.Scatter(
+            x=all_global_metrics['threshold'],
+            y=all_global_metrics[y],
+            mode='markers+lines',
+            name=y
+        )
+    )
+
+fig.update_layout(xaxis_title="threshold")
+
+file_to_write = os.path.join(images_folder, f'metrics_vs_threshold.html')
+fig.write_html(file_to_write)
+written_files.append(file_to_write)
 
 print('The following files were written:')
 for file in written_files:
