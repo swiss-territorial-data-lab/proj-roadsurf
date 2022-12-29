@@ -26,10 +26,14 @@ PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
 # OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
 
+ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
 GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
+LAYER=cfg['input']['layer']
 PREDICTIONS=cfg['input']['to_evaluate']
 # CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
-CONSIDERED_TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['considered_tiles'])
+CONSIDERED_TILES=os.path.join(FINAL_FOLDER, cfg['input']['considered_tiles'])
+
+shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 
 written_files=[]
 
@@ -97,15 +101,25 @@ def get_corresponding_class(row):
         print(f"Unexpected class: {row['pred_class']}")
         sys.exit(1)
 
+def determine_category(row):
+    if row['BELAGSART']==100:
+        return 'artificial'
+    if row['BELAGSART']==200:
+        return 'natural'
+    else:
+        return 'else'
+
 # Importing files ----------------------------------
 print('Importing files...')
 
-ground_truth=gpd.read_file(GROUND_TRUTH)
+road_parameters=pd.read_excel(ROAD_PARAMETERS)
+
+ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
 
 predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():
     # dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
-    dataset=gpd.read_file(os.path.join(PROCESSED_FOLDER, dataset_name))
+    dataset=gpd.read_file(os.path.join(FINAL_FOLDER, dataset_name))
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
 predictions.drop(columns=['pred_class'], inplace=True)
@@ -116,6 +130,28 @@ considered_tiles=gpd.read_file(CONSIDERED_TILES)
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'created/quarries.shp'))
 
 # Information treatment ----------------------------
+print('Filtering the GT for the roads of interest...')
+filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
+filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
+                                        how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+
+filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
+
+# Roads in quarries are always naturals
+print('-- Roads in quarries are always naturals...')
+
+quarries_4326=quarries.to_crs(epsg=4326)
+
+fct_misc.test_crs(filtered_ground_truth.crs, quarries_4326.crs)
+
+roads_in_quarries=gpd.sjoin(filtered_ground_truth, quarries_4326, predicate='within')
+filename='roads_in_quarries.shp'
+roads_in_quarries.to_file(os.path.join(shp_gpkg_folder, filename))
+written_files.append(os.path.join(shp_gpkg_folder, filename))
+
+filtered_ground_truth=filtered_ground_truth[~filtered_ground_truth['OBJECTID'].isin(
+                                    roads_in_quarries['OBJECTID'].unique().tolist())] 
+
 print('Limiting the labels to the visible area of labels and predictions...')
 
 tiles_union=considered_tiles['geometry'].unary_union
@@ -124,8 +160,8 @@ considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_
                                 crs=4326
                                 )
 
-fct_misc.test_crs(considered_zone.crs, ground_truth)
-visible_ground_truth=gpd.overlay(ground_truth, considered_zone, how="intersection")
+fct_misc.test_crs(considered_zone.crs, filtered_ground_truth)
+visible_ground_truth=gpd.overlay(filtered_ground_truth, considered_zone, how="intersection")
 
 del considered_tiles, tiles_union, considered_zone, 
 
@@ -139,13 +175,13 @@ predictions_2056=predictions.to_crs(epsg=2056)
 fct_misc.test_crs(ground_truth_2056.crs, predictions_2056.crs)
 predicted_roads_2056=gpd.overlay(ground_truth_2056, predictions_2056, how='intersection')
 
-predicted_roads_filtered=predicted_roads_2056[(~predicted_roads_2056['OBJECTID'].isna()) &
+predicted_roads_filtered=predicted_roads_2056[(~predicted_roads_2056['BELAGSART'].isna()) &
                                             (~predicted_roads_2056['score'].isna())].copy()
 predicted_roads_filtered['joined_area']=predicted_roads_filtered.area
 predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label'], 2)
 predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_in_label']*predicted_roads_filtered['score']
 
-del visible_ground_truth, ground_truth_2056, predictions_2056
+del ground_truth, ground_truth_2056, filtered_ground_truth, predictions_2056
 
 print('Calculating the indexes and the metrics per threshold for the score of the predictions...')
 
@@ -162,7 +198,7 @@ for threshold in thresholds:
     valid_pred_roads=predicted_roads_filtered[predicted_roads_filtered['score']>=threshold]
     detected_roads_id=valid_pred_roads['OBJECTID'].unique().tolist()
 
-    for road_id in ground_truth['OBJECTID'].unique().tolist():
+    for road_id in visible_ground_truth['OBJECTID'].unique().tolist():
 
         if road_id not in detected_roads_id:
             final_type['road_id'].append(road_id)
@@ -208,10 +244,10 @@ for threshold in thresholds:
 
     final_type_df=pd.DataFrame(final_type)
 
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY']],
+    comparison_df=gpd.GeoDataFrame(final_type_df.merge(visible_ground_truth[['OBJECTID','geometry', 'CATEGORY']],
                                     how='inner', left_on='road_id', right_on='OBJECTID'))
     try:
-        assert(comparison_df.shape[0]==ground_truth.shape[0]), "There are too many or not enough labels in the final results"
+        assert(comparison_df.shape[0]==visible_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
     except Exception as e:
         print(e)
         sys.exit(1)
@@ -286,7 +322,6 @@ print(f"The final F1-score is {best_global_metrics.f1_score[0]}",
     f" with a precision of {round(best_global_metrics.precision[0],2)}", 
     f" and a recall of {round(best_global_metrics.recall[0],2)}.")
 
-shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 filename='types_from_detections.shp'
 best_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
 written_files.append('final/shp_gpkg/' + filename)
@@ -336,7 +371,7 @@ for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
     filtered_results=best_comparison_df.copy()
-    filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_class']='undetermined'
+    filtered_results.loc[filtered_results['diff_score']<threshold, 'road_type']='undetermined'
     part_metrics_by_class, part_global_metrics = get_balanced_accuracy(filtered_results, CLASSES)
 
     part_metrics_by_class['threshold']=threshold
@@ -381,48 +416,15 @@ print(f"The final F1-score is {best_global_filtered_metrics.f1_score[0]}",
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 filename='filtered_types_from_detections.shp'
-best_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
+best_filtered_results.to_file(os.path.join(shp_gpkg_folder, filename))
 written_files.append('final/shp_gpkg/' + filename)
-
-filename='filtered_types_from_all_detections.shp'
-all_preds_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
-written_files.append('final/shp_gpkg/' + filename)
-
-print('\n')
-
-# Roads in quarries are always naturals
-print('Checking for roads in quarries...')
-
-quarries_4326=quarries.to_crs(epsg=4326)
-
-fct_misc.test_crs(best_comparison_df.crs, quarries_4326.crs)
-
-roads_in_quarries=gpd.sjoin(best_comparison_df, quarries_4326, predicate='within')
-
-comp_df_quarries=best_comparison_df.copy()
-for road_id in roads_in_quarries['OBJECTID'].unique().tolist():
-    comp_df_quarries.loc[comp_df_quarries['OBJECTID']==road_id, 'road_type']='natural'
-
-class_metrics_post_quarries, global_metrics_post_quarries=get_balanced_accuracy(comp_df_quarries, CLASSES)
-
-print(f"For a threshold of {best_threshold}...")
-
-for metric in class_metrics_post_quarries.itertuples():
-    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-        f" and a recall of {round(metric.Rk, 2)}")
-
-print(f"The final F1-score is {global_metrics_post_quarries.f1_score[0]}", 
-    f" with a precision of {round(global_metrics_post_quarries.precision[0],2)}", 
-    f" and a recall of {round(global_metrics_post_quarries.recall[0],2)}.")
 
 print('\n')
 
 # Filters from data exploration
 print('Applying filters from data exploration...')
-comp_df_explo=comp_df_quarries.copy()
-
-comp_df_explo.loc[comp_df_quarries['diff_score']<=0.06, 'road_type']='undetermined'
-
+comp_df_explo=best_comparison_df.copy()
+comp_df_explo.loc[comp_df_explo['diff_score']<=0.06, 'road_type']='undetermined'
 
 # comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'road_type']='artificial'
 
@@ -439,7 +441,7 @@ print(f"The final F1-score is {global_metrics_post_explo.f1_score[0]}",
 print('\n')
 
 # If all roads where classified as artificial (baseline)
-if False:
+if True:
     print('\n')
     print('If all roads were classified as artificial...')
     comp_df_all_art=best_comparison_df.copy()
@@ -554,6 +556,53 @@ fig.update_layout(xaxis_title="threshold")
 file_to_write = os.path.join(images_folder, f'metrics_vs_threshold.html')
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
+
+# Plot the number of Pk, Rk dep on class and threshold on the final score
+fig = go.Figure()
+
+for id_cl in CLASSES:
+    
+    for y in ['Pk', 'Rk']:
+
+        fig.add_trace(
+            go.Scatter(
+                x=filtered_metrics_by_class['threshold'][filtered_metrics_by_class['cover_class']==id_cl],
+                y=filtered_metrics_by_class[y][filtered_metrics_by_class['cover_class']==id_cl],
+                mode='markers+lines',
+                name=y[0:2]+'_'+str(id_cl)
+            )
+        )
+
+    fig.update_layout(xaxis_title="threshold")
+    
+file_to_write = os.path.join(images_folder, f'metrics_vs_final_score_threshold_dep_on_class.html')
+fig.write_html(file_to_write)
+written_files.append(file_to_write)
+
+artificial_results=best_filtered_results[best_filtered_results['road_type']=='artificial'].copy()
+hist_artificial=artificial_results.plot.hist(column=['art_score'], by='tag',
+                                title=f'Repartition of the class score depending on the tag',
+                                figsize=(15,5),
+                                grid=True, 
+                                ec='black',
+                                )
+fig = hist_artificial[0].get_figure()
+file_to_write = os.path.join(images_folder, f'histogram_artificial_scores_per_tag.jpeg')
+fig.savefig(file_to_write, bbox_inches='tight')
+written_files.append(file_to_write)
+
+natural_results=best_filtered_results[best_filtered_results['road_type']=='natural'].copy()
+hist_natural=natural_results.plot.hist(column=['nat_score'], by='tag',
+                                title=f'Repartition of the class score depending on the tag',
+                                figsize=(15,5),
+                                grid=True,
+                                ec='black',
+                                )
+fig = hist_natural[0].get_figure()
+file_to_write = os.path.join(images_folder, f'histogram_natural_scores_per_tag.jpeg')
+fig.savefig(file_to_write, bbox_inches='tight')
+written_files.append(file_to_write)
+
 
 print('The following files were written:')
 for file in written_files:
