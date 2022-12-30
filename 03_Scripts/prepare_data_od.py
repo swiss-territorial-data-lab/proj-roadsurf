@@ -205,8 +205,8 @@ if GENERATE_TILES_INFO:
     roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
 
     roads_of_interest=non_forest_roads.merge(roads_parameters_filtered[['GDB-Code']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
-    roads_of_interest=roads_of_interest[roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
-
+    roads_to_exclude=roads_of_interest[~roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
+    road_id_to_exclude=roads_to_exclude['OBJECTID'].unique().tolist()
 
     aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=aoi.crs)
 
@@ -223,7 +223,8 @@ if GENERATE_TILES_INFO:
 
     roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='the roads')
 
-    roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART', 'OBJECTID', 'KUNSTBAUTE', 'GDB-Code'], inplace=True)
+    roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART',
+                            'KUNSTBAUTE', 'GDB-Code', 'road_len'], inplace=True)
     
     roi_4326=roi_in_aoi.to_crs(epsg=4326)
     valid_roi_4326=fct_misc.test_valid_geom(roi_4326, correct=True, gdf_obj_name="the roads")
@@ -242,12 +243,25 @@ if GENERATE_TILES_INFO:
     print('-- Checking for intersections with the restricted area of interest...')
     fct_misc.test_crs(tms.crs, roi_in_aoi_3857.crs)
 
-    tiles_in_restricted_aoi=gpd.sjoin(epsg3857_tiles_gdf, roi_in_aoi_3857, how='inner')
+    tiles_in_raoi_w_unknown=gpd.sjoin(epsg3857_tiles_gdf, roi_in_aoi_3857, how='inner')
+
+    tile_id_to_exclude=[]
+    for road_id in road_id_to_exclude:
+        tiles_intersects_roads=tiles_in_raoi_w_unknown[tiles_in_raoi_w_unknown['OBJECTID']==road_id].copy()
+        if not tiles_intersects_roads.empty:
+            tile_id_to_exclude.extend(tiles_intersects_roads['OBJECTID'].unique().tolist())
+    tile_id_to_exclude=list(dict.fromkeys(tile_id_to_exclude))
+    print(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
 
     print('-- Setting a formatted id...')
-    tiles_in_restricted_aoi.drop_duplicates('geometry', inplace=True)
-    tiles_in_restricted_aoi.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
+    tiles_in_raoi_w_unknown.drop_duplicates('geometry', inplace=True)
+    tiles_in_raoi_w_unknown.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
+    tiles_in_raoi_w_unknown.reset_index(drop=True, inplace=True)
+
+    tiles_in_restricted_aoi=tiles_in_raoi_w_unknown[~tiles_in_raoi_w_unknown['OBJECTID'].isin(tile_id_to_exclude)].copy()
+    tiles_in_restricted_aoi.drop(columns=['OBJECTID'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
+    print(f"{tiles_in_raoi_w_unknown.shape[0]-tiles_in_restricted_aoi.shape[0]} have been excluded.")
 
     xyz=[]
     for idx in tiles_in_restricted_aoi.index:
