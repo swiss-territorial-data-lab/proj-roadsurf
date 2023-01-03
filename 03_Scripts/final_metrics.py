@@ -50,32 +50,33 @@ def get_balanced_accuracy(comparison_df, CLASSES):
     return: a dataframe with the TP, FP, FN, precision and recall per class and a second one with the global metrics.
     '''
 
-
     metrics_dict={'cover_class':[], 'TP':[], 'FP':[], 'FN':[], 'Pk':[], 'Rk':[], 'count':[]}
-    for road_type in CLASSES:
-        metrics_dict['cover_class'].append(road_type)
-        tp=comparison_df[(comparison_df['CATEGORY']==comparison_df['road_type']) &
-                        (comparison_df['CATEGORY']==road_type)].shape[0]
-        fp=comparison_df[(comparison_df['CATEGORY']!=comparison_df['road_type']) &
-                        (comparison_df['road_type']==road_type)].shape[0]
-        fn=comparison_df[(comparison_df['CATEGORY']!=comparison_df['road_type']) &
-                        (comparison_df['CATEGORY']==road_type)].shape[0]
+    for cover_type in CLASSES:
+        metrics_dict['cover_class'].append(cover_type)
+        tp=comparison_df[(comparison_df['tag']=='TP') &
+                        (comparison_df['CATEGORY']==cover_type)].shape[0]
+        fp_precision=comparison_df[(comparison_df['tag']=='FP') &
+                        (comparison_df['cover_type']==cover_type)].shape[0]
+        fp_recall=comparison_df[(comparison_df['tag']=='FP') &
+                        (comparison_df['CATEGORY']==cover_type)].shape[0]
+        fn=comparison_df[(comparison_df['tag']=='FN') &
+                        (comparison_df['CATEGORY']==cover_type)].shape[0]
 
         metrics_dict['TP'].append(tp)
-        metrics_dict['FP'].append(fp)
-        metrics_dict['FN'].append(fn)
+        metrics_dict['FP'].append(fp_precision)
+        metrics_dict['FN'].append(fn+fp_recall)
 
         if tp==0:
             pk=0
             rk=0
         else:
-            pk=tp/(tp+fp)
-            rk=tp/(tp+fn)
+            pk=tp/(tp+fp_precision)
+            rk=tp/(tp+fn+fp_recall)
 
         metrics_dict['Pk'].append(pk)
         metrics_dict['Rk'].append(rk)
 
-        metrics_dict['count'].append(comparison_df[comparison_df['CATEGORY']==road_type].shape[0])
+        metrics_dict['count'].append(comparison_df[comparison_df['CATEGORY']==cover_type].shape[0])
 
     metrics_df=pd.DataFrame(metrics_dict)
 
@@ -93,6 +94,8 @@ def get_balanced_accuracy(comparison_df, CLASSES):
     return metrics_df, global_metrics_df
 
 def get_corresponding_class(row):
+    'Get the class in words from the class ids out of the object detector with the method apply.'
+
     if row['pred_class']==0:
         return 'artificial'
     elif row['pred_class']==1:
@@ -102,12 +105,51 @@ def get_corresponding_class(row):
         sys.exit(1)
 
 def determine_category(row):
+    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
+
     if row['BELAGSART']==100:
         return 'artificial'
     if row['BELAGSART']==200:
         return 'natural'
     else:
-        return 'else'
+        print(f"Unexpected class: {row['BELAGSART']}")
+        sys.exit(1)
+        # return 'unknown'
+
+def get_tag(row):
+        'Compare the class in the prediction and the GT and tag the row as TP, FP or FN with the method apply.'
+
+        pred_class=row.cover_type
+        gt_class=row.CATEGORY
+
+        if pred_class=='undetermined' or pred_class=='undetected':
+            return 'FN'
+        elif pred_class==gt_class:
+            return 'TP'
+        elif pred_class!=gt_class:
+             return 'FP'
+        else:
+            print(f'Unexpected configuration: prediction class is {pred_class} and ground truth class is {gt_class}.')
+            sys.exit(1)
+
+def show_metrics(metrics_by_class, global_metrics):
+    '''
+    Print the by class precision and recall and the global precision, recall and f1-score
+
+    - metrics_by_class: The by-class metrics as given by the function get_balanced_accuracy()
+    - global_metrics: The global metrics as given by the function get_balanced_accuracy()
+
+    return: -
+    '''
+
+    for metric in metrics_by_class.itertuples():
+        print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+            f" and a recall of {round(metric.Rk, 2)}")
+
+    print(f"The final F1-score for a threshold of 0 is {global_metrics.f1_score[0]}", 
+        f" with a precision of {round(global_metrics.precision[0],2)} and a recall of",
+        f" {round(global_metrics.recall[0],2)}.")
+
 
 # Importing files ----------------------------------
 print('Importing files...')
@@ -134,6 +176,7 @@ print('Filtering the GT for the roads of interest...')
 filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
 filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
                                         how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997]
 
 filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
 
@@ -194,7 +237,7 @@ tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-    final_type={'road_id':[], 'road_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
+    final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
     valid_pred_roads=predicted_roads_filtered[predicted_roads_filtered['score']>=threshold]
     detected_roads_id=valid_pred_roads['OBJECTID'].unique().tolist()
 
@@ -202,7 +245,7 @@ for threshold in thresholds:
 
         if road_id not in detected_roads_id:
             final_type['road_id'].append(road_id)
-            final_type['road_type'].append('undetected')
+            final_type['cover_type'].append('undetected')
             final_type['nat_score'].append(0)
             final_type['art_score'].append(0)
             final_type['diff_score'].append(0)
@@ -228,15 +271,15 @@ for threshold in thresholds:
 
         if artificial_index==natural_index:
             final_type['road_id'].append(road_id)
-            final_type['road_type'].append('undetermined')
+            final_type['cover_type'].append('undetermined')
             final_type['diff_score'].append(0)
         elif artificial_index > natural_index:
             final_type['road_id'].append(road_id)
-            final_type['road_type'].append('artificial')
+            final_type['cover_type'].append('artificial')
             final_type['diff_score'].append(abs(artificial_index-natural_index))
         elif artificial_index < natural_index:
             final_type['road_id'].append(road_id)
-            final_type['road_type'].append('natural')
+            final_type['cover_type'].append('natural')
             final_type['diff_score'].append(abs(artificial_index-natural_index))
 
         final_type['art_score'].append(round(artificial_index,3))
@@ -252,18 +295,7 @@ for threshold in thresholds:
         print(e)
         sys.exit(1)
 
-    tags=[]
-    for road in comparison_df.itertuples():
-        pred_class=road.road_type
-        gt_class=road.CATEGORY
-
-        if pred_class=='undetermined' or pred_class=='undetected':
-            tags.append('FN')
-        elif pred_class==gt_class:
-            tags.append('TP')
-        else:
-            tags.append('FP')
-    comparison_df['tag']=tags
+    comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
 
     part_metrics_by_class, part_global_metrics = get_balanced_accuracy(comparison_df, CLASSES)
 
@@ -284,13 +316,7 @@ for threshold in thresholds:
         best_global_metrics=part_global_metrics
 
         print('\n')
-        for metric in part_metrics_by_class.itertuples():
-            print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-                f" and a recall of {round(metric.Rk, 2)}")
-
-        print(f"The final F1-score for a threshold of 0 is {part_global_metrics.f1_score[0]}", 
-            f" with a precision of {round(part_global_metrics.precision[0],2)} and a recall of",
-            f" {round(part_global_metrics.recall[0],2)}.")
+        show_metrics(part_metrics_by_class, part_global_metrics)
 
     elif (part_global_metrics.f1_score>max_f1)[0]:
         best_threshold=threshold
@@ -313,14 +339,7 @@ tqdm_log.close()
 print('\n')
 # print(f"The best threshold for the f1-score is at {best_threshold}.")
 print(f"For a threshold of {best_threshold}...")
-
-for metric in best_by_class_metrics.itertuples():
-    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-        f" and a recall of {round(metric.Rk, 2)}")
-
-print(f"The final F1-score is {best_global_metrics.f1_score[0]}", 
-    f" with a precision of {round(best_global_metrics.precision[0],2)}", 
-    f" and a recall of {round(best_global_metrics.recall[0],2)}.")
+show_metrics(best_by_class_metrics, best_global_metrics)
 
 filename='types_from_detections.shp'
 best_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
@@ -330,12 +349,12 @@ filename='types_from_all_detections.shp'
 all_preds_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
 written_files.append('final/shp_gpkg/' + filename)
 
-
+print('\n')
 print('-- Calculating the accuracy...')
 
-per_right_roads=best_comparison_df[best_comparison_df['CATEGORY']==best_comparison_df['road_type']].shape[0]/best_comparison_df.shape[0]*100
-per_missing_roads=best_comparison_df[best_comparison_df['road_type']=='undetected'].shape[0]/best_comparison_df.shape[0]*100
-per_undeter_roads=best_comparison_df[best_comparison_df['road_type']=='undetermined'].shape[0]/best_comparison_df.shape[0]*100
+per_right_roads=best_comparison_df[best_comparison_df['CATEGORY']==best_comparison_df['cover_type']].shape[0]/best_comparison_df.shape[0]*100
+per_missing_roads=best_comparison_df[best_comparison_df['cover_type']=='undetected'].shape[0]/best_comparison_df.shape[0]*100
+per_undeter_roads=best_comparison_df[best_comparison_df['cover_type']=='undetermined'].shape[0]/best_comparison_df.shape[0]*100
 per_wrong_roads=round(100-per_right_roads-per_missing_roads-per_undeter_roads,2)
 
 print(f"{round(per_right_roads,2)}% of the roads were found and have the correct road type.")
@@ -343,20 +362,20 @@ print(f"{round(per_undeter_roads,2)} of the roads were detected, but have an und
 print(f"{round(per_missing_roads,2)}% of the roads were not found.")
 print(f"{per_wrong_roads}% of the roads had the wrong road type.")
 
-for road_type in ['undetected', 'undetermined']:
+for cover_type in ['undetected', 'undetermined']:
     print('\n')
     per_type_roads_100=round(best_comparison_df[
-                                        (best_comparison_df['road_type']==road_type) &
+                                        (best_comparison_df['cover_type']==cover_type) &
                                         (best_comparison_df['CATEGORY']=='artificial')
                                         ].shape[0]/best_comparison_df.shape[0]*100,2)
 
     per_type_roads_200=round(best_comparison_df[
-                                        (best_comparison_df['road_type']==road_type) &
+                                        (best_comparison_df['cover_type']==cover_type) &
                                         (best_comparison_df['CATEGORY']=='natural')
                                         ].shape[0]/best_comparison_df.shape[0]*100,2)
 
-    print(f"{per_type_roads_100}% of the roads are {road_type} and have the artificial type")
-    print(f"{per_type_roads_200}% of the roads are {road_type} and have the natural type")
+    print(f"{per_type_roads_100}% of the roads are {cover_type} and have the artificial type")
+    print(f"{per_type_roads_200}% of the roads are {cover_type} and have the natural type")
 
 print('\n')
 
@@ -371,7 +390,9 @@ for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
     filtered_results=best_comparison_df.copy()
-    filtered_results.loc[filtered_results['diff_score']<threshold, 'road_type']='undetermined'
+    filtered_results.drop(columns=['tag'], inplace=True)
+    filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_type']='undetermined'
+    filtered_results['tag']=filtered_results.apply(lambda row: get_tag(row), axis=1)
     part_metrics_by_class, part_global_metrics = get_balanced_accuracy(filtered_results, CLASSES)
 
     part_metrics_by_class['threshold']=threshold
@@ -405,14 +426,7 @@ tqdm_log.close()
 print('\n')
 # print(f"The best threshold for the f1-score is at {best_threshold}.")
 print(f"For a threshold of the difference of indices of {best_filtered_threshold}...")
-
-for metric in best_by_class_filtered_metrics.itertuples():
-    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-        f" and a recall of {round(metric.Rk, 2)}")
-
-print(f"The final F1-score is {best_global_filtered_metrics.f1_score[0]}", 
-    f" with a precision of {round(best_global_filtered_metrics.precision[0],2)}", 
-    f" and a recall of {round(best_global_filtered_metrics.recall[0],2)}.")
+show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 filename='filtered_types_from_detections.shp'
@@ -424,38 +438,29 @@ print('\n')
 # Filters from data exploration
 print('Applying filters from data exploration...')
 comp_df_explo=best_comparison_df.copy()
-comp_df_explo.loc[comp_df_explo['diff_score']<=0.06, 'road_type']='undetermined'
+comp_df_explo.loc[comp_df_explo['diff_score']<=0.06, 'cover_type']='undetermined'
 
-# comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'road_type']='artificial'
+# comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'cover_type']='artificial'
+
+comp_df_explo.drop(columns=['tag'], inplace=True)
+comp_df_explo['tag']=comp_df_explo.apply(lambda row: get_tag(row), axis=1)
 
 class_metrics_post_explo, global_metrics_post_explo=get_balanced_accuracy(comp_df_explo, CLASSES)
-
-for metric in class_metrics_post_explo.itertuples():
-    print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-        f" and a recall of {round(metric.Rk, 2)}")
-
-print(f"The final F1-score is {global_metrics_post_explo.f1_score[0]}", 
-    f" with a precision of {round(global_metrics_post_explo.precision[0],2)}", 
-    f" and a recall of {round(global_metrics_post_explo.recall[0],2)}.")
+show_metrics(class_metrics_post_explo, global_metrics_post_explo)
 
 print('\n')
 
 # If all roads where classified as artificial (baseline)
 if True:
-    print('\n')
     print('If all roads were classified as artificial...')
     comp_df_all_art=best_comparison_df.copy()
-    comp_df_all_art['road_type']='artificial'
+    comp_df_all_art['cover_type']='artificial'
+    comp_df_all_art.drop(columns=['tag'], inplace=True)
+    comp_df_all_art['tag']=comp_df_all_art.apply(lambda row: get_tag(row), axis=1)
 
     class_metrics_all_art, global_metrics_all_art=get_balanced_accuracy(comp_df_all_art, CLASSES)
-
-    for metric in class_metrics_all_art.itertuples():
-        print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-            f" and a recall of {round(metric.Rk, 2)}")
-
-    print(f"The final F1-score is {global_metrics_all_art.f1_score[0]}", 
-        f" with a precision of {round(global_metrics_all_art.precision[0],2)}", 
-        f" and a recall of {round(global_metrics_all_art.recall[0],2)}.")
+    show_metrics(class_metrics_all_art, global_metrics_all_art)
+    print('\n')
 
 # Make the graphs
 # Code strongly inspired from the script 'assess_predictions.py' in the object detector.
@@ -579,27 +584,37 @@ file_to_write = os.path.join(images_folder, f'metrics_vs_final_score_threshold_d
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
-artificial_results=best_filtered_results[best_filtered_results['road_type']=='artificial'].copy()
-hist_artificial=artificial_results.plot.hist(column=['art_score'], by='tag',
-                                title=f'Repartition of the class score depending on the tag',
-                                figsize=(15,5),
-                                grid=True, 
-                                ec='black',
-                                )
-fig = hist_artificial[0].get_figure()
-file_to_write = os.path.join(images_folder, f'histogram_artificial_scores_per_tag.jpeg')
-fig.savefig(file_to_write, bbox_inches='tight')
-written_files.append(file_to_write)
+parameters={'artificial': 'art_score',
+            'natural': 'nat_score'}
 
-natural_results=best_filtered_results[best_filtered_results['road_type']=='natural'].copy()
-hist_natural=natural_results.plot.hist(column=['nat_score'], by='tag',
+for cover_type in parameters.keys():
+    results=best_filtered_results[best_filtered_results['cover_type']==cover_type]
+    hist_artificial=results.plot.hist(column=[parameters[cover_type]], by='tag',
+                                    range=(0, 1.0),
+                                    bins=20,
+                                    title=f'Repartition of the class score depending on the tag',
+                                    figsize=(8,6),
+                                    grid=True, 
+                                    ec='black',
+                                    )
+    fig = hist_artificial[0].get_figure()
+    fig.tight_layout() 
+    file_to_write = os.path.join(images_folder, f'histogram_{cover_type}_scores_per_tag.jpeg')
+    fig.savefig(file_to_write, bbox_inches='tight')
+    written_files.append(file_to_write)
+
+determined_roads=best_filtered_results[~best_filtered_results['cover_type'].isin(['undetermined', 'undetected'])]
+hist_diff_score=determined_roads.plot.hist(column=['diff_score'], by=['tag', 'cover_type'],
+                                range=(0, 1.0),
+                                bins=20,
                                 title=f'Repartition of the class score depending on the tag',
-                                figsize=(15,5),
+                                figsize=(5, 10),
                                 grid=True,
                                 ec='black',
                                 )
-fig = hist_natural[0].get_figure()
-file_to_write = os.path.join(images_folder, f'histogram_natural_scores_per_tag.jpeg')
+fig = hist_diff_score[0].get_figure()
+file_to_write = os.path.join(images_folder, f'histogram_diff_scores_per_tag_and_cover.jpeg')
+fig.tight_layout() 
 fig.savefig(file_to_write, bbox_inches='tight')
 written_files.append(file_to_write)
 

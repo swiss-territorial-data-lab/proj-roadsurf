@@ -322,7 +322,7 @@ def pca_procedure(dataset, features, to_describe,
 
     file_prefix = file_prefix + '_' if file_prefix[-1]!='_' else file_prefix
 
-    # 1 & 2. Define the variables and scale & calculate the PCA
+    # 1 & 2. Define the variables, scale & calculate the PCA
     pca, coor_PC=calculate_pca(dataset, features, to_describe, label_pc)
 
     coor_PC_df = pd.DataFrame(data = coor_PC, columns = label_pc)
@@ -340,7 +340,7 @@ def pca_procedure(dataset, features, to_describe,
     fig_pc_num.savefig(os.path.join(dirpath_images, file_prefix + 'PC_to_keep_evplot.jpg'), bbox_inches='tight')
     written_files.append(file_prefix + 'PC_to_keep_evplot.jpg')
 
-    # 3 bis. Get feature correlation and covariance
+    # 3 bis. Get features correlation and covariance
     # cf. https://scentellegher.github.io/machine-learning/2020/01/27/pca-loadings-sklearn.html
     loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
 
