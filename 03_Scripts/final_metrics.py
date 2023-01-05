@@ -145,11 +145,11 @@ def show_metrics(metrics_by_class, global_metrics):
 
     for metric in metrics_by_class.itertuples():
         print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-            f" and a recall of {round(metric.Rk, 2)}")
+            f"and a recall of {round(metric.Rk, 2)}")
 
     print(f"The final f1-score is {global_metrics.f1_score[0]}", 
-        f" with a precision of {round(global_metrics.precision[0],2)} and a recall of",
-        f" {round(global_metrics.recall[0],2)}.")
+        f"with a precision of {round(global_metrics.precision[0],2)} and a recall of",
+        f"{round(global_metrics.recall[0],2)}.")
 
 
 # Importing files ----------------------------------
@@ -485,6 +485,34 @@ if True:
     show_metrics(class_metrics_all_art, global_metrics_all_art)
     print('\n')
 
+# Get the bin accuracy
+print('Calculate the bin accuracy to estimate the calibration...')
+accuracy_tables=[]
+bin_accuracy_param={'artificial':['art_score', 'artificial', 'artifical score'],
+                    'natural': ['nat_score', 'natural', 'natural score'], 
+                    'artificial_diff': ['diff_score', 'artificial', 'score diff in artificial roads'],
+                    'naturall_diff':['diff_score', 'natural', 'score diff in natural roads']}
+for param in bin_accuracy_param.keys():
+    bin_values=[]
+    threshold_values=[]
+    for threshold in thresholds[1:]:
+        roads_in_bin=best_filtered_results[
+                                        (best_filtered_results[bin_accuracy_param[param][0]]>threshold-0.5) &
+                                        (best_filtered_results[bin_accuracy_param[param][0]]<=threshold) &
+                                        (best_filtered_results['CATEGORY']==bin_accuracy_param[param][1])
+                                        ]
+
+        if not roads_in_bin.empty:
+            bin_values.append(
+                    roads_in_bin[
+                        roads_in_bin['cover_type']==bin_accuracy_param[param][1]
+                        ].shape[0]/roads_in_bin.shape[0])
+            threshold_values.append(threshold)
+
+    df=pd.DataFrame({'threshold': threshold_values, 'accuracy': bin_values})
+    df.name=bin_accuracy_param[param][2]
+    accuracy_tables.append(df)
+
 # Make the graphs
 # Code strongly inspired from the script 'assess_predictions.py' in the object detector.
 print('Make some graphs for the visualization of the impact from the thresholds...')
@@ -607,6 +635,35 @@ file_to_write = os.path.join(images_folder, f'metrics_vs_final_score_threshold_d
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
+# Make the calibratin curve
+fig=go.Figure()
+
+for trace in accuracy_tables:
+    fig.add_trace(
+        go.Scatter(
+            x=trace['threshold'],
+            y=trace['accuracy'],
+            mode='markers+lines',
+            name=trace.name,
+        )
+    )
+
+fig.add_trace(
+    go.Scatter(
+        x=thresholds,
+        y=thresholds,
+        mode='lines',
+        name='reference',
+    )
+)
+
+fig.update_layout(xaxis_title="confidance threshold", yaxis_title="bin accuracy", title="Reliability diagram")
+
+file_to_write = os.path.join(images_folder, f'reliability_diagram.html')
+fig.write_html(file_to_write)
+written_files.append(file_to_write)
+
+# Make histograms of the score depending on the tag.
 parameters={'artificial': 'art_score',
             'natural': 'nat_score'}
 
