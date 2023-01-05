@@ -28,7 +28,8 @@ FINAL_FOLDER=cfg['final_folder']
 
 ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
 GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
-LAYER=cfg['input']['layer']
+if 'layer' in cfg['input'].keys():
+    LAYER=cfg['input']['layer']
 PREDICTIONS=cfg['input']['to_evaluate']
 # CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
 CONSIDERED_TILES=os.path.join(FINAL_FOLDER, cfg['input']['considered_tiles'])
@@ -146,7 +147,7 @@ def show_metrics(metrics_by_class, global_metrics):
         print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
             f" and a recall of {round(metric.Rk, 2)}")
 
-    print(f"The final F1-score for a threshold of 0 is {global_metrics.f1_score[0]}", 
+    print(f"The final f1-score is {global_metrics.f1_score[0]}", 
         f" with a precision of {round(global_metrics.precision[0],2)} and a recall of",
         f" {round(global_metrics.recall[0],2)}.")
 
@@ -156,7 +157,8 @@ print('Importing files...')
 
 road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
-ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
+# ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
+ground_truth=gpd.read_file(GROUND_TRUTH)
 
 predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():
@@ -183,11 +185,13 @@ filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determ
 # Roads in quarries are always naturals
 print('-- Roads in quarries are always naturals...')
 
-quarries_4326=quarries.to_crs(epsg=4326)
+buffered_quarries=quarries.copy()
+buffered_quarries['geometry']=buffered_quarries.buffer(5)
+buffered_quarries_4326=buffered_quarries.to_crs(epsg=4326)
 
-fct_misc.test_crs(filtered_ground_truth.crs, quarries_4326.crs)
+fct_misc.test_crs(filtered_ground_truth.crs, buffered_quarries_4326.crs)
 
-roads_in_quarries=gpd.sjoin(filtered_ground_truth, quarries_4326, predicate='within')
+roads_in_quarries=gpd.sjoin(filtered_ground_truth, buffered_quarries_4326, predicate='within')
 filename='roads_in_quarries.shp'
 roads_in_quarries.to_file(os.path.join(shp_gpkg_folder, filename))
 written_files.append(os.path.join(shp_gpkg_folder, filename))
@@ -208,7 +212,7 @@ visible_ground_truth=gpd.overlay(filtered_ground_truth, considered_zone, how="in
 
 del considered_tiles, tiles_union, considered_zone, 
 
-print('Getting the intersecting area...')
+print('Getting the intersecting area between predictions and labels...')
 
 ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
 ground_truth_2056['area_label']=ground_truth_2056.area
@@ -305,12 +309,20 @@ for threshold in thresholds:
     all_metrics_by_class=pd.concat([all_metrics_by_class, part_metrics_by_class], ignore_index=True)
     all_global_metrics=pd.concat([all_global_metrics, part_global_metrics], ignore_index=True)
 
+    balanced_P=part_metrics_by_class['Pk'].sum()/2
+    balanced_R=part_metrics_by_class['Rk'].sum()/2
+    if balanced_P==0 and balanced_R==0:
+        balanced_f1=0
+    else:
+        balanced_f1=2*balanced_P*balanced_R/(balanced_P + balanced_R)
+
     if threshold==0:
         all_preds_comparison_df=comparison_df
 
         best_threshold=0
         best_comparison_df=comparison_df
-        max_f1=part_global_metrics.f1_score[0]
+        # max_f1=part_global_metrics.f1_score[0]
+        max_f1=balanced_f1
         
         best_by_class_metrics=part_metrics_by_class
         best_global_metrics=part_global_metrics
@@ -318,10 +330,12 @@ for threshold in thresholds:
         print('\n')
         show_metrics(part_metrics_by_class, part_global_metrics)
 
-    elif (part_global_metrics.f1_score>max_f1)[0]:
+    # elif (part_global_metrics.f1_score>max_f1)[0]:
+    elif (balanced_f1>max_f1):
         best_threshold=threshold
         best_comparison_df=comparison_df
-        max_f1=part_global_metrics.f1_score[0]
+        # max_f1=part_global_metrics.f1_score[0]
+        max_f1=balanced_f1
         
         best_by_class_metrics=part_metrics_by_class
         best_global_metrics=part_global_metrics
@@ -401,18 +415,28 @@ for threshold in thresholds:
     filtered_metrics_by_class=pd.concat([filtered_metrics_by_class, part_metrics_by_class], ignore_index=True)
     filtered_global_metrics=pd.concat([filtered_global_metrics, part_global_metrics], ignore_index=True)
 
+    balanced_P=part_metrics_by_class['Pk'].sum()/2
+    balanced_R=part_metrics_by_class['Rk'].sum()/2
+    if balanced_P==0 and balanced_R==0:
+        balanced_f1=0
+    else:
+        balanced_f1=2*balanced_P*balanced_R/(balanced_P + balanced_R)
+
     if threshold==0:
         best_filtered_threshold=0
         best_filtered_results=filtered_results
-        max_f1=part_global_metrics.f1_score[0]
+        # max_f1=part_global_metrics.f1_score[0]
+        max_f1=balanced_f1
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
 
-    elif (part_global_metrics.f1_score>max_f1)[0]:
+    # elif (part_global_metrics.f1_score>max_f1)[0]:
+    elif (balanced_f1>max_f1):
         best_filtered_threshold=threshold
         best_filtered_results=filtered_results
-        max_f1=part_global_metrics.f1_score[0]
+        # max_f1=part_global_metrics.f1_score[0]
+        max_f1=balanced_f1
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
@@ -438,12 +462,11 @@ print('\n')
 # Filters from data exploration
 print('Applying filters from data exploration...')
 comp_df_explo=best_comparison_df.copy()
-comp_df_explo.loc[comp_df_explo['diff_score']<=0.06, 'cover_type']='undetermined'
 
-# comp_df_explo.loc[comp_df_quarries['road_len']>1300, 'cover_type']='artificial'
+# comp_df_explo.loc[comp_df_explo['road_len']>1300, 'cover_type']='artificial'
 
-comp_df_explo.drop(columns=['tag'], inplace=True)
-comp_df_explo['tag']=comp_df_explo.apply(lambda row: get_tag(row), axis=1)
+# comp_df_explo.drop(columns=['tag'], inplace=True)
+# comp_df_explo['tag']=comp_df_explo.apply(lambda row: get_tag(row), axis=1)
 
 class_metrics_post_explo, global_metrics_post_explo=get_balanced_accuracy(comp_df_explo, CLASSES)
 show_metrics(class_metrics_post_explo, global_metrics_post_explo)

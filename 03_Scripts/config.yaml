@@ -87,11 +87,12 @@ final_metrics.py:
   initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
   # object_detector_folder: obj_detector
-  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/z18_TLM_RGBNir_by_road
+  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/z18_TLM_by_road
   input:
     road_param: TLM/Strassen/Objektarten_to_keep.xlsx
-    ground_truth: shapefiles_gpkg/roads_MO_TLM.gpkg
-    layer: sectionned_roads
+    ground_truth: json/ground_truth_labels.geojson
+    # ground_truth: shapefiles_gpkg/roads_MO_TLM.gpkg
+    # layer: sectionned_roads
     considered_tiles: split_aoi_tiles.geojson
     to_evaluate:
       trn: trn_predictions.geojson
