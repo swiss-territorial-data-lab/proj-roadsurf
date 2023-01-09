@@ -29,6 +29,7 @@ GENERATE_LABELS=cfg['tasks']['generate_labels']
 if not (DETERMINE_ROAD_SURFACES or GENERATE_TILES_INFO or GENERATE_LABELS) :
     print('Nothing to do. Exiting!')
     sys.exit(0)
+
 else:
 
     INPUT = cfg['input']
@@ -47,12 +48,17 @@ else:
     BELAGSART_TO_KEEP=[100, 200]
 
     if 'ok_tiles' in cfg.keys():
-        OK_TILES=OUTPUT_DIR+cfg['ok_tiles']
+        OK_TILES = OUTPUT_DIR+cfg['ok_tiles']
     else:
-        OK_TILES=False
+        OK_TILES = False
+
+    if 'restricted_aoi_training' in INPUT['input_files'].keys():
+        RESTRICTED_AOI_TRAIN = INPUT_DIR + INPUT['input_files']['restricted_aoi_training']
+    else:
+        RESTRICTED_AOI_TRAIN = False
 
     if GENERATE_TILES_INFO or GENERATE_LABELS:
-        ZOOM_LEVEL=cfg['zoom_level']
+        ZOOM_LEVEL = cfg['zoom_level']
 
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
 path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
@@ -314,15 +320,23 @@ if GENERATE_LABELS:
                 # TODO: generalize the tiles to the correct level or to the level 18 for comparison
                 print('Ok tiles for this zoom not developped yet :(')
 
+    if RESTRICTED_AOI_TRAIN:
+        print('A subset of the AOI is used for the traning.')
+        restricted_aoi_training=gpd.read_file(RESTRICTED_AOI_TRAIN)
+        restricted_aoi_training_4326=restricted_aoi_training.to_crs(epsg=4326)
+        tiles_in_restricted_aoi_4326=gpd.sjoin(tiles_in_restricted_aoi_4326,
+                                            restricted_aoi_training_4326[['KBNUM', 'geometry']],
+                                            how='inner')
+        tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
+
     labels_gdf_2056=non_forest_roads.copy()
     labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
     labels_gdf_2056['SUPERCATEGORY']='road'
     labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
     labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
 
-    fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
-
     print('Labels on tiles...')
+    fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 

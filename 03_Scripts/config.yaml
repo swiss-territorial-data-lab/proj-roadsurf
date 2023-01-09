@@ -25,7 +25,8 @@ prepare_data_od.py:
       roads: /TLM/Strassen/corrected_roads_inside_AOI.shp
       roads_param: /TLM/Strassen/Objektarten_to_keep.xlsx
       forests: /TLM/Clip_Wald_Bodenbedeckung/forests.shp
-      aoi: /AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+      aoi: /AOI/AOI_Prototyp_Belagsarten.shp
+      restricted_aoi_training: /AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
   processed_input:
     roads_for_labels: roads_for_OD.shp
     # layer: sectionned_roads_by_surface
@@ -92,7 +93,7 @@ final_metrics.py:
   debug_mode: True
   initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/z18_TLM_by_road
+  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/z18_TLM_RGBNir_by_road
   input:
     road_param: TLM/Strassen/Objektarten_to_keep.xlsx
     ground_truth: json/ground_truth_labels.geojson
