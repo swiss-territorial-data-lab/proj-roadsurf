@@ -92,7 +92,6 @@ final_metrics.py:
   debug_mode: True
   initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
   processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  # object_detector_folder: obj_detector
   final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/z18_TLM_by_road
   input:
     road_param: TLM/Strassen/Objektarten_to_keep.xlsx

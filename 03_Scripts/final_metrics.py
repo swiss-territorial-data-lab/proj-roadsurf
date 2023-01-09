@@ -13,7 +13,7 @@ import fct_misc
 
 
 with open('03_Scripts/config.yaml') as fp:
-    cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']    #  [os.path.basename(__file__)]
+    cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
 
 
 # Define constants ------------------------------------
@@ -24,14 +24,12 @@ CLASSES=['artificial', 'natural']
 INITIAL_FOLDER=cfg['initial_folder']
 PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
-# OD_FOLDER=os.path.join(PROCESSED_FOLDER, cfg['object_detector_folder'])
 
 ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
 GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 if 'layer' in cfg['input'].keys():
     LAYER=cfg['input']['layer']
 PREDICTIONS=cfg['input']['to_evaluate']
-# CONSIDERED_TILES=os.path.join(OD_FOLDER, cfg['input']['considered_tiles'])
 CONSIDERED_TILES=os.path.join(FINAL_FOLDER, cfg['input']['considered_tiles'])
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
@@ -42,8 +40,8 @@ written_files=[]
 
 def get_balanced_accuracy(comparison_df, CLASSES):
     '''
-    Get a dataframe with the GT and the predictions and calculate the per-class and blanced-weighted precision, accuracy
-    and f1-score.
+    Get a dataframe with the GT, the predictions and the tags (TP, FP, FN)
+    Calculate the per-class and blanced-weighted precision, recall and f1-score.
 
     - comparison_df: dataframe with the GT and the predictions
     - CLASSES: classes to search for
@@ -162,7 +160,6 @@ ground_truth=gpd.read_file(GROUND_TRUTH)
 
 predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():
-    # dataset=gpd.read_file(os.path.join(OD_FOLDER, dataset_name))
     dataset=gpd.read_file(os.path.join(FINAL_FOLDER, dataset_name))
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
@@ -351,7 +348,6 @@ for threshold in thresholds:
 tqdm_log.close()
 
 print('\n')
-# print(f"The best threshold for the f1-score is at {best_threshold}.")
 print(f"For a threshold of {best_threshold}...")
 show_metrics(best_by_class_metrics, best_global_metrics)
 
@@ -448,8 +444,7 @@ for threshold in thresholds:
 tqdm_log.close()
 
 print('\n')
-# print(f"The best threshold for the f1-score is at {best_threshold}.")
-print(f"For a threshold of the difference of indices of {best_filtered_threshold}...")
+print(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
 show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
@@ -492,10 +487,11 @@ bin_accuracy_param={'artificial':['art_score', 'artificial', 'artifical score'],
                     'natural': ['nat_score', 'natural', 'natural score'], 
                     'artificial_diff': ['diff_score', 'artificial', 'score diff in artificial roads'],
                     'naturall_diff':['diff_score', 'natural', 'score diff in natural roads']}
+thresholds_bins=np.arange(0, 1.05, 0.05)
 for param in bin_accuracy_param.keys():
     bin_values=[]
     threshold_values=[]
-    for threshold in thresholds[1:]:
+    for threshold in thresholds_bins:
         roads_in_bin=best_filtered_results[
                                         (best_filtered_results[bin_accuracy_param[param][0]]>threshold-0.5) &
                                         (best_filtered_results[bin_accuracy_param[param][0]]<=threshold) &
@@ -635,7 +631,7 @@ file_to_write = os.path.join(images_folder, f'metrics_vs_final_score_threshold_d
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
-# Make the calibratin curve
+# Make the calibration curve
 fig=go.Figure()
 
 for trace in accuracy_tables:
@@ -650,8 +646,8 @@ for trace in accuracy_tables:
 
 fig.add_trace(
     go.Scatter(
-        x=thresholds,
-        y=thresholds,
+        x=thresholds_bins,
+        y=thresholds_bins,
         mode='lines',
         name='reference',
     )
