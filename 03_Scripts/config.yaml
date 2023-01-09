@@ -81,6 +81,12 @@ limit_visible_aoi.py:
     images: processed/obj_detector/all-images-limited-aoi
   zoom: 18
 
+add_tile_mask.py:
+  mask_as_band: true
+  working_folder: '/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed'
+  input_files:
+    roads: 'json/ground_truth_labels.geojson'
+    tiles: "obj_detector/split_aoi_tiles.geojson"
 
 final_metrics.py:
   debug_mode: True
