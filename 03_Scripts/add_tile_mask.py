@@ -12,7 +12,7 @@ import rasterio
 from rasterio.features import rasterize
 
 import numpy as np
-import matplotlib.pyplot as plt
+from statistics import median
 
 import fct_misc
 
@@ -83,6 +83,8 @@ inv_masks_tiles=gpd.overlay(tiles, roads_union, how="difference")
 
 inv_masks_tiles_3857=inv_masks_tiles.to_crs(epsg=3857)
 
+tile_mask_mean=[]
+tile_mask_std=[]
 # cf. https://lpsmlgeo.github.io/2019-09-22-binary_mask/
 for tile_row in tqdm(inv_masks_tiles_3857.itertuples(), desc='Producing the masks', total=inv_masks_tiles_3857.shape[0]):
     tile_id=tile_row.id
@@ -111,6 +113,8 @@ for tile_row in tqdm(inv_masks_tiles_3857.itertuples(), desc='Producing the mask
                     out_shape=im_size)
                     
     tile_mask = (1-inv_mask) * 255
+    tile_mask_mean.append(np.mean(tile_mask))
+    tile_mask_std.append(np.std(tile_mask))
 
     tile_img_augmented=np.ndarray(shape=(im_num_bands+1,256,256), dtype='uint8')
     tile_img_augmented[0:im_num_bands,:,:]=tile_img
@@ -126,3 +130,9 @@ for tile_row in tqdm(inv_masks_tiles_3857.itertuples(), desc='Producing the mask
         mask_meta.update({'count': 1})
         with rasterio.open(os.path.join(MASK_DIR, filename), 'w', **mask_meta) as dst:
             dst.write(tile_mask, 1)
+
+print(f"The median of the means over the tile masks is {round(median(tile_mask_mean), 3)}",
+    f"and the median of the standard deviations is {round(median(tile_mask_std), 3)}.")
+
+df=pd.DataFrame({'mean': tile_mask_mean, 'std': tile_mask_std})
+df.to_csv('tables/test.csv', index=False)
