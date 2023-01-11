@@ -73,7 +73,7 @@ def determine_category(row):
     else:
         return 'else'
 
-# Information treatment -----------------------------------------------------------------------------------------
+# Information treatment ------------------------------------------
 
 if DETERMINE_ROAD_SURFACES:
     print('Importing files...')
@@ -227,13 +227,13 @@ if GENERATE_TILES_INFO:
     if DEBUG_MODE:
         roi_in_aoi=roi_in_aoi[1:100]
 
-    roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='the roads')
+    roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='roads')
 
     roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART',
                             'KUNSTBAUTE', 'GDB-Code', 'road_len'], inplace=True)
     
     roi_4326=roi_in_aoi.to_crs(epsg=4326)
-    valid_roi_4326=fct_misc.test_valid_geom(roi_4326, correct=True, gdf_obj_name="the roads")
+    valid_roi_4326=fct_misc.test_valid_geom(roi_4326, correct=True, gdf_obj_name="reprojected roads")
     bboxes_extent_4326=valid_roi_4326.unary_union.bounds
 
     # cf. https://developmentseed.org/morecantile/usage/
@@ -255,7 +255,7 @@ if GENERATE_TILES_INFO:
     for road_id in road_id_to_exclude:
         tiles_intersects_roads=tiles_in_raoi_w_unknown[tiles_in_raoi_w_unknown['OBJECTID']==road_id].copy()
         if not tiles_intersects_roads.empty:
-            tile_id_to_exclude.extend(tiles_intersects_roads['OBJECTID'].unique().tolist())
+            tile_id_to_exclude.extend(tiles_intersects_roads['title'].unique().tolist())
     tile_id_to_exclude=list(dict.fromkeys(tile_id_to_exclude))
     print(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
 
@@ -264,7 +264,7 @@ if GENERATE_TILES_INFO:
     tiles_in_raoi_w_unknown.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
     tiles_in_raoi_w_unknown.reset_index(drop=True, inplace=True)
 
-    tiles_in_restricted_aoi=tiles_in_raoi_w_unknown[~tiles_in_raoi_w_unknown['OBJECTID'].isin(tile_id_to_exclude)].copy()
+    tiles_in_restricted_aoi=tiles_in_raoi_w_unknown[~tiles_in_raoi_w_unknown['title'].isin(tile_id_to_exclude)].copy()
     tiles_in_restricted_aoi.drop(columns=['OBJECTID'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
     print(f"{tiles_in_raoi_w_unknown.shape[0]-tiles_in_restricted_aoi.shape[0]} have been excluded.")
@@ -328,12 +328,12 @@ if GENERATE_LABELS:
                                             restricted_aoi_training_4326[['KBNUM', 'geometry']],
                                             how='inner')
         tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
-
-    labels_gdf_2056=non_forest_roads.copy()
+    
+    labels_gdf_2056=non_forest_roads[non_forest_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)].copy()
     labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
     labels_gdf_2056['SUPERCATEGORY']='road'
     labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
-    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='the labels')
+    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='labels')
 
     print('Labels on tiles...')
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
