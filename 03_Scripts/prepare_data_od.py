@@ -259,7 +259,6 @@ if GENERATE_TILES_INFO:
     tile_id_to_exclude=list(dict.fromkeys(tile_id_to_exclude))
     print(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
 
-    print('-- Setting a formatted id...')
     tiles_in_raoi_w_unknown.drop_duplicates('geometry', inplace=True)
     tiles_in_raoi_w_unknown.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
     tiles_in_raoi_w_unknown.reset_index(drop=True, inplace=True)
@@ -269,6 +268,7 @@ if GENERATE_TILES_INFO:
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
     print(f"{tiles_in_raoi_w_unknown.shape[0]-tiles_in_restricted_aoi.shape[0]} have been excluded.")
 
+    print('-- Setting a formatted id...')
     xyz=[]
     for idx in tiles_in_restricted_aoi.index:
         xyz.append([re.sub('[^0-9]','',coor) for coor in tiles_in_restricted_aoi.loc[idx,'title'].split(',')])

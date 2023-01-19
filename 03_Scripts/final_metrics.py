@@ -41,7 +41,7 @@ written_files=[]
 def get_balanced_accuracy(comparison_df, CLASSES):
     '''
     Get a dataframe with the GT, the predictions and the tags (TP, FP, FN)
-    Calculate the per-class and blanced-weighted precision, recall and f1-score.
+    Calculate the per-class and global precision, recall and f1-score.
 
     - comparison_df: dataframe with the GT and the predictions
     - CLASSES: classes to search for
@@ -81,14 +81,24 @@ def get_balanced_accuracy(comparison_df, CLASSES):
 
     total_roads_by_type=metrics_df['count'].sum()
 
-    precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_roads_by_type
-    recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_roads_by_type
+    weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_roads_by_type
+    weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_roads_by_type
 
-    if precision==0 and recall==0:
-        f1_score=0
+    if weighted_precision==0 and weighted_recall==0:
+        weighted_f1_score=0
     else:
-        f1_score=round(2*precision*recall/(precision + recall), 2)
-    global_metrics_df=pd.DataFrame({'precision': [precision], 'recall': [recall], 'f1_score': [f1_score]})
+        weighted_f1_score=round(2*weighted_precision*weighted_recall/(weighted_precision + weighted_recall), 2)
+
+    balanced_precision=metrics_df['Pk'].sum()/2
+    balanced_recall=metrics_df['Rk'].sum()/2
+
+    if balanced_precision==0 and balanced_recall==0:
+        balanced_f1_score=0
+    else:
+        balanced_f1_score=round(2*balanced_precision*balanced_recall/(weighted_precision + balanced_recall), 2)
+
+    global_metrics_df=pd.DataFrame({'Pw': [weighted_precision], 'Rw': [weighted_recall], 'f1w': [weighted_f1_score],
+                                    'Pb': [balanced_precision], 'Rb': [balanced_recall], 'f1b': [balanced_f1_score]})
 
     return metrics_df, global_metrics_df
 
@@ -145,9 +155,9 @@ def show_metrics(metrics_by_class, global_metrics):
         print(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
             f"and a recall of {round(metric.Rk, 2)}")
 
-    print(f"The final f1-score is {global_metrics.f1_score[0]}", 
-        f"with a precision of {round(global_metrics.precision[0],2)} and a recall of",
-        f"{round(global_metrics.recall[0],2)}.")
+    print(f"The final f1-score is {global_metrics.f1w[0]}", 
+        f"with a precision of {round(global_metrics.Pw[0],2)} and a recall of",
+        f"{round(global_metrics.Rw[0],2)}.")
 
 
 # Importing files ----------------------------------
@@ -189,9 +199,9 @@ buffered_quarries_4326=buffered_quarries.to_crs(epsg=4326)
 fct_misc.test_crs(filtered_ground_truth.crs, buffered_quarries_4326.crs)
 
 roads_in_quarries=gpd.sjoin(filtered_ground_truth, buffered_quarries_4326, predicate='within')
-filename='roads_in_quarries.shp'
-roads_in_quarries.to_file(os.path.join(shp_gpkg_folder, filename))
-written_files.append(os.path.join(shp_gpkg_folder, filename))
+# filename='roads_in_quarries.shp'
+# roads_in_quarries.to_file(os.path.join(shp_gpkg_folder, filename))
+# written_files.append(os.path.join(shp_gpkg_folder, filename))
 
 filtered_ground_truth=filtered_ground_truth[~filtered_ground_truth['OBJECTID'].isin(
                                     roads_in_quarries['OBJECTID'].unique().tolist())] 
@@ -306,20 +316,13 @@ for threshold in thresholds:
     all_metrics_by_class=pd.concat([all_metrics_by_class, part_metrics_by_class], ignore_index=True)
     all_global_metrics=pd.concat([all_global_metrics, part_global_metrics], ignore_index=True)
 
-    balanced_P=part_metrics_by_class['Pk'].sum()/2
-    balanced_R=part_metrics_by_class['Rk'].sum()/2
-    if balanced_P==0 and balanced_R==0:
-        balanced_f1=0
-    else:
-        balanced_f1=2*balanced_P*balanced_R/(balanced_P + balanced_R)
-
     if threshold==0:
         all_preds_comparison_df=comparison_df
 
         best_threshold=0
         best_comparison_df=comparison_df
-        # max_f1=part_global_metrics.f1_score[0]
-        max_f1=balanced_f1
+        # max_f1=part_global_metrics.f1w[0]
+        max_f1=part_global_metrics.f1b[0]
         
         best_by_class_metrics=part_metrics_by_class
         best_global_metrics=part_global_metrics
@@ -327,12 +330,12 @@ for threshold in thresholds:
         print('\n')
         show_metrics(part_metrics_by_class, part_global_metrics)
 
-    # elif (part_global_metrics.f1_score>max_f1)[0]:
-    elif (balanced_f1>max_f1):
+    # elif (part_global_metrics.f1w>max_f1)[0]:
+    elif (part_global_metrics.f1b>max_f1)[0]:
         best_threshold=threshold
         best_comparison_df=comparison_df
-        # max_f1=part_global_metrics.f1_score[0]
-        max_f1=balanced_f1
+        # max_f1=part_global_metrics.f1w[0]
+        max_f1=part_global_metrics.f1b[0]
         
         best_by_class_metrics=part_metrics_by_class
         best_global_metrics=part_global_metrics
@@ -341,7 +344,7 @@ for threshold in thresholds:
         print(f"The best threshold for the f1-score is now {best_threshold}.")
 
     # else:
-    #     print(part_global_metrics.f1_score[0])
+    #     print(part_global_metrics.f1b[0])
 
     tqdm_log.update(1)
 
@@ -368,7 +371,7 @@ per_undeter_roads=best_comparison_df[best_comparison_df['cover_type']=='undeterm
 per_wrong_roads=round(100-per_right_roads-per_missing_roads-per_undeter_roads,2)
 
 print(f"{round(per_right_roads,2)}% of the roads were found and have the correct road type.")
-print(f"{round(per_undeter_roads,2)} of the roads were detected, but have an undetermined road type.")
+print(f"{round(per_undeter_roads,2)}% of the roads were detected, but have an undetermined road type.")
 print(f"{round(per_missing_roads,2)}% of the roads were not found.")
 print(f"{per_wrong_roads}% of the roads had the wrong road type.")
 
@@ -411,28 +414,21 @@ for threshold in thresholds:
     filtered_metrics_by_class=pd.concat([filtered_metrics_by_class, part_metrics_by_class], ignore_index=True)
     filtered_global_metrics=pd.concat([filtered_global_metrics, part_global_metrics], ignore_index=True)
 
-    balanced_P=part_metrics_by_class['Pk'].sum()/2
-    balanced_R=part_metrics_by_class['Rk'].sum()/2
-    if balanced_P==0 and balanced_R==0:
-        balanced_f1=0
-    else:
-        balanced_f1=2*balanced_P*balanced_R/(balanced_P + balanced_R)
-
     if threshold==0:
         best_filtered_threshold=0
         best_filtered_results=filtered_results
-        # max_f1=part_global_metrics.f1_score[0]
-        max_f1=balanced_f1
+        # max_f1=part_global_metrics.f1w[0]
+        max_f1=part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
 
-    # elif (part_global_metrics.f1_score>max_f1)[0]:
-    elif (balanced_f1>max_f1):
+    # elif (part_global_metrics.f1w>max_f1)[0]:
+    elif (part_global_metrics.f1b>max_f1)[0]:
         best_filtered_threshold=threshold
         best_filtered_results=filtered_results
-        # max_f1=part_global_metrics.f1_score[0]
-        max_f1=balanced_f1
+        # max_f1=part_global_metrics.f1w[0]
+        max_f1=part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
@@ -520,10 +516,21 @@ fig_k = go.Figure()
 # Plot of the precision vs recall
 fig.add_trace(
     go.Scatter(
-        x=all_global_metrics['recall'],
-        y=all_global_metrics['precision'],
+        x=all_global_metrics['Rw'],
+        y=all_global_metrics['Pw'],
         mode='markers+lines',
         text=all_global_metrics['threshold'],
+        name='weighted aggregation'
+    )
+)
+
+fig.add_trace(
+    go.Scatter(
+        x=all_global_metrics['Rb'],
+        y=all_global_metrics['Pb'],
+        mode='markers+lines',
+        text=all_global_metrics['threshold'],
+        name='balanced aggregation'
     )
 )
 
@@ -592,7 +599,7 @@ written_files.append(file_to_write)
 # Plot the metrics vs thresholds
 fig = go.Figure()
 
-for y in ['precision', 'recall', 'f1_score']:
+for y in ['Pw', 'Rw', 'f1w', 'Pb', 'Rb', 'f1b']:
 
     fig.add_trace(
         go.Scatter(
