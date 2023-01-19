@@ -22,13 +22,20 @@ DEBUG_MODE=cfg['debug_mode']
 CLASSES=['artificial', 'natural']
 
 INITIAL_FOLDER=cfg['initial_folder']
-PROCESSED_FOLDER=cfg['processed_folder']
+# PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
 
 ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
-GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
+
+GROUND_TRUTH=os.path.join(FINAL_FOLDER, cfg['input']['ground_truth'])
+# GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 if 'layer' in cfg['input'].keys():
     LAYER=cfg['input']['layer']
+if 'other_labels' in cfg['input'].keys():
+    OTHER_LABELS=os.path.join(FINAL_FOLDER, cfg['input']['other_labels'])
+else:
+    OTHER_LABELS=None
+
 PREDICTIONS=cfg['input']['to_evaluate']
 CONSIDERED_TILES=os.path.join(FINAL_FOLDER, cfg['input']['considered_tiles'])
 
@@ -167,6 +174,9 @@ road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
 # ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
 ground_truth=gpd.read_file(GROUND_TRUTH)
+if OTHER_LABELS:
+    other_labels=gpd.read_file(OTHER_LABELS)
+    ground_truth=pd.concat([ground_truth, other_labels], ignore_index=True)
 
 predictions=gpd.GeoDataFrame()
 for dataset_name in PREDICTIONS.values():

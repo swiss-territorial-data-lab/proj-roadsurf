@@ -18,7 +18,7 @@ prepare_data_od.py:
   tasks:
     determine_roads_surfaces: false
     generate_tiles_info: true
-    generate_labels: false
+    generate_labels: true
   input:
     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
     input_files:
@@ -92,16 +92,17 @@ add_tile_mask.py:
 final_metrics.py:
   debug_mode: True
   initial_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial
-  processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/swissIMAGE_10_2_tiles
+  # processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/4_tiles_inference
   input:
     road_param: TLM/Strassen/Objektarten_to_keep.xlsx
     ground_truth: json/ground_truth_labels.geojson
     # ground_truth: shapefiles_gpkg/roads_MO_TLM.gpkg
     # layer: sectionned_roads
+    other_labels: json/other_labels.geojson
     considered_tiles: split_aoi_tiles.geojson
     to_evaluate:
       trn: trn_predictions.geojson
       val: val_predictions.geojson
       tst: tst_predictions.geojson
-      # oth: oth_predictions.geojson 
+      oth: oth_predictions.geojson 
