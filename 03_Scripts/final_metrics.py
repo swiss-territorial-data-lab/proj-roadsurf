@@ -61,23 +61,23 @@ def get_balanced_accuracy(comparison_df, CLASSES):
         metrics_dict['cover_class'].append(cover_type)
         tp=comparison_df[(comparison_df['tag']=='TP') &
                         (comparison_df['CATEGORY']==cover_type)].shape[0]
-        fp_precision=comparison_df[(comparison_df['tag']=='FP') &
+        fp=comparison_df[(comparison_df['tag']=='wrong class') &
                         (comparison_df['cover_type']==cover_type)].shape[0]
-        fp_recall=comparison_df[(comparison_df['tag']=='FP') &
+        fn_class=comparison_df[(comparison_df['tag']=='wrong class') &
                         (comparison_df['CATEGORY']==cover_type)].shape[0]
         fn=comparison_df[(comparison_df['tag']=='FN') &
                         (comparison_df['CATEGORY']==cover_type)].shape[0]
 
         metrics_dict['TP'].append(tp)
-        metrics_dict['FP'].append(fp_precision)
-        metrics_dict['FN'].append(fn+fp_recall)
+        metrics_dict['FP'].append(fp)
+        metrics_dict['FN'].append(fn+fn_class)
 
         if tp==0:
             pk=0
             rk=0
         else:
-            pk=tp/(tp+fp_precision)
-            rk=tp/(tp+fn+fp_recall)
+            pk=tp/(tp+fp)
+            rk=tp/(tp+fn+fn_class)
 
         metrics_dict['Pk'].append(pk)
         metrics_dict['Rk'].append(rk)
@@ -143,7 +143,7 @@ def get_tag(row):
         elif pred_class==gt_class:
             return 'TP'
         elif pred_class!=gt_class:
-             return 'FP'
+             return 'wrong class'
         else:
             print(f'Unexpected configuration: prediction class is {pred_class} and ground truth class is {gt_class}.')
             sys.exit(1)

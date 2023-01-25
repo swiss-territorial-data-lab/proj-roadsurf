@@ -288,7 +288,7 @@ if GENERATE_LABELS:
 
     if OK_TILES:
         if ZOOM_LEVEL==18:
-            tiles_table=pd.read_excel(OK_TILES)
+            tiles_table=gpd.read_file(OK_TILES)
             tiles_table.replace('-','0.5', inplace=True)
             verified_tiles=tiles_table[~tiles_table['OK'].isna()].copy()
             verified_tiles=verified_tiles.astype({'OK': 'float'})
