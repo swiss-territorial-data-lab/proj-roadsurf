@@ -11,12 +11,13 @@ import time
 from tqdm import tqdm
 import yaml
 
-# the following lines allow us to import modules from within this file's parent folder
-from inspect import getsourcefile
-current_path = os.path.abspath(getsourcefile(lambda:0))
-current_dir = os.path.dirname(current_path)
-parent_dir = current_dir[:current_dir.rfind(os.path.sep)]
-sys.path.insert(0, parent_dir)
+# # the following lines allow us to import modules from within this file's parent folder
+# from inspect import getsourcefile
+# current_path = os.path.abspath(getsourcefile(lambda:0))
+# current_dir = os.path.dirname(current_path)
+# parent_dir = current_dir[:current_dir.rfind(os.path.sep)]
+# sys.path.insert(0, parent_dir)
+sys.path.insert(0, 'scripts')
 
 import fct_misc
 
@@ -26,13 +27,17 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-parser.add_argument('config_file', type=str, help='a YAML config file')
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
+# parser.add_argument('config_file', type=str, help='a YAML config file')
+# args = parser.parse_args()
 
-logger.info(f"Using {args.config_file} as config file.")
-with open(args.config_file) as fp:
-        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+# logger.info(f"Using {args.config_file} as config file.")
+# with open(args.config_file) as fp:
+#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+
+logger.info(f"Using config.yaml as config file.")
+with open('config.yaml') as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)['prepare_data_od.py']
 
 # Define constants -----------------------------------------
 
@@ -62,7 +67,7 @@ else:
     BELAGSART_TO_KEEP=[100, 200]
 
     if 'ok_tiles' in cfg.keys():
-        OK_TILES = os.path.join(INPUT_DIR, cfg['ok_tiles'])
+        OK_TILES = os.path.join(OUTPUT_DIR, cfg['ok_tiles'])
     else:
         OK_TILES = False
 
@@ -304,18 +309,6 @@ if GENERATE_LABELS:
             ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
 
             tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles[['title','OK']], how='inner', on='title')
-
-            nbr_verified_tiles=verified_tiles.shape[0]
-            per_unverified_tiles=round((tiles_table.shape[0]-nbr_verified_tiles)*100/tiles_table.shape[0],2)
-            logger.info(f"{per_unverified_tiles}% of the tiles are not verified yet.")
-
-            per_rejected_tiles=round((nbr_verified_tiles-ok_tiles.shape[0])*100/nbr_verified_tiles,2)
-            logger.info(f"{per_rejected_tiles}% of the verified tiles were rejected")
-
-            per_good_tiles=round((ok_tiles.shape[0]-ok_tiles[ok_tiles['OK']<0.75].shape[0])*100/nbr_verified_tiles,2)
-            per_ok_tiles=round((ok_tiles.shape[0]-ok_tiles[ok_tiles['OK']>0.75].shape[0])*100/nbr_verified_tiles,2)
-            logger.info(f"{per_good_tiles}% of the verified tiles are good.")
-            logger.info(f"{per_ok_tiles}% of the verified tiles were are ok.")
 
         else:
             ok_tiles_z18=gpd.read_file(os.path.join(path_json, 'ok_tiles_aoi_z18_221212.geojson'))

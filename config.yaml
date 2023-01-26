@@ -16,7 +16,7 @@ prepare_data_od.py:
   processed_input:
     roads_for_labels: roads_for_OD.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  ok_tiles: json/ok_tiles_better_balance.geojson
+  ok_tiles: json/ok_tiles_balancing_2_tiles.geojson
   zoom_level: 18  # keep between 17 and 20  
 
 
