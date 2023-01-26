@@ -23,7 +23,7 @@ prepare_data_od.py:
 final_metrics.py:
   debug_mode: True
   initial_folder: data
-  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/improved_repartition
+  final_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
   input:
     road_param: roads_parameters.xlsx
     ground_truth: json/ground_truth_labels.geojson

@@ -80,7 +80,7 @@ else:
         ZOOM_LEVEL = cfg['zoom_level']
 
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
-path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json'))
+path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'obj_detector/json'))
 
 # Define functions --------------------------------------------
 
