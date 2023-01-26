@@ -1,0 +1,165 @@
+# Procedure with the object detector
+
+prepare_data_od.py:
+  tasks:
+    determine_roads_surfaces: true
+    generate_tiles_info: true
+    generate_labels: true
+  input:
+    input_folder: data
+    input_files:
+      roads: swissTLM3D/roads_lines.shp
+      roads_param: roads_parameters.xlsx
+      forests: swissTLM3D/forests.shp
+      aoi: AOI/aoi.shp
+      # restricted_aoi_training: AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+  processed_input:
+    roads_for_labels: roads_for_OD.shp
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  # ok_tiles: json/ok_tiles_filtered_forests.geojson
+  zoom_level: 18  # keep between 17 and 20  
+
+
+final_metrics.py:
+  debug_mode: True
+  initial_folder: data
+  final_folder: /mnt/s3/proj-roadsurf/02_Data/final/obj_detec/improved_repartition
+  input:
+    road_param: roads_parameters.xlsx
+    ground_truth: json/ground_truth_labels.geojson
+    # other_labels: json/other_labels.geojson
+    considered_tiles: split_aoi_tiles.geojson
+    to_evaluate:
+      trn: trn_predictions.geojson
+      val: val_predictions.geojson
+      tst: tst_predictions.geojson
+      # oth: oth_predictions.geojson 
+
+
+generate_tilesets.py:
+  debug_mode: false
+  datasets:
+    aoi_tiles_geojson: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/json/tiles_aoi.geojson
+    ground_truth_labels_geojson: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/json/ground_truth_labels.geojson
+    # other_labels_geojson: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/json/other_labels.geojson
+    orthophotos_web_service:
+      type: XYZ
+      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest
+      srs: "EPSG:3857"
+  output_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
+  tile_size: 256 # per side, in pixels
+  overwrite: False
+  n_jobs: 10
+  COCO_metadata:
+    year: 2022
+    version: 2.0
+    description: 2018 SWISSIMAGE RS with segmentation of Feature Class TLM_STsRASSE
+    contributor: swisstopo
+    url: https://swisstopo.ch
+    license:
+      name: unknown
+      url: https://www.swisstopo.admin.ch/fr/home/meta/conditions-generales/geodonnees/ogd.html
+
+calculate_statistics.py:
+  working_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
+  tiles: split_aoi_tiles.geojson
+
+train_model.py:
+  working_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
+  log_subfolder: logs
+  sample_tagged_img_subfolder: sample_training_images
+  COCO_files: # relative paths, w/ respect to the working_folder
+      trn: COCO_trn.json
+      val: COCO_val.json
+      tst: COCO_tst.json
+  detectron2_config_file: '../../detectron2_config_3bands.yaml' # path relative to the working_folder
+  model_weights:
+      model_zoo_checkpoint_url: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml"
+      
+make_predictions.py:
+  working_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
+  log_subfolder: logs
+  sample_tagged_img_subfolder: sample_prediction_images
+  COCO_files: # relative paths, w/ respect to the working_folder
+      trn: COCO_trn.json
+      val: COCO_val.json
+      tst: COCO_tst.json
+      # oth: COCO_oth.json
+  detectron2_config_file: '../../detectron2_config_3bands.yaml' # path relative to the working_folder
+  model_weights:
+      pth_file: 'logs/model_final.pth'
+  
+assess_predictions.py:
+  datasets:
+    ground_truth_labels_geojson: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/json/ground_truth_labels.geojson
+    image_metadata_json: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/img_metadata.json
+    split_aoi_tiles_geojson: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
+    predictions:
+      trn: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/trn_predictions_at_0dot05_threshold.pkl
+      val: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/val_predictions_at_0dot05_threshold.pkl
+      tst: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/tst_predictions_at_0dot05_threshold.pkl
+      # oth: /home/gsalamin/proj-roadsurf-b/processed/obj_detector/oth_predictions_at_0dot05_threshold.pkl
+  output_folder: /home/gsalamin/proj-roadsurf-b/processed/obj_detector
+
+
+# Procedure based on a supervised classification
+
+prepare_data.py:
+  debug_mode: false
+  tasks:
+    determine_roads_surfaces: true
+    determine_restricted_AOI: true
+  input:
+    input_folder: data
+    input_files:
+      roads: swissTLM3D/roads_lines.shp
+      roads_param: roads_parameters.xlsx
+      forests: swissTLM3D/forests.shp
+      aoi: AOI/aoi.shp
+  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+
+
+statistical_analysis.py:
+  debug_mode: false
+  use_zonal_stats: false
+  correct_balance: false
+  processed:
+    processed_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+    input_files:
+      images: /obj_detector/all-images
+      roads: /shapefiles_gpkg/roads_polygons.shp
+      tiles: /json/tiles_aoi_z18.geojson
+  final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+  param:
+    pixel_threshold: 10
+    max_confidence: 12.5
+    make_boxplots: true
+    do_ks_test: false
+    make_pca: true
+
+# One time scripts
+
+# correct_gt.py:
+#   input:
+#     input_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data
+#     input_files:
+#       initial_roads: /initial/TLM/Strassen/Roads_inside_AOI.shp
+#       corrections: /initial/TLM/Strassen/test_natural_roads_feedback.shp
+
+
+RS_images_to_S3.py:
+  access_key: ...
+  secret_key: ...
+  url: https://s3.pub1.infomaniak.cloud
+  datapath: D:\Export_RS\*
+  bucket: proj-roadsurf
+  outpath: 02_Data/initial/images_RS/
+
+
+add_tile_mask.py:
+  mask_as_band: true
+  working_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  input_files:
+    roads: json/ground_truth_labels.geojson
+    tiles: obj_detector/split_aoi_tiles.geojson
+
