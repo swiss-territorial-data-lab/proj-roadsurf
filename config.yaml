@@ -16,7 +16,7 @@ prepare_data_od.py:
   processed_input:
     roads_for_labels: roads_for_OD.shp
   output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
-  # ok_tiles: json/ok_tiles_filtered_forests.geojson
+  ok_tiles: json/ok_tiles_better_balance.geojson
   zoom_level: 18  # keep between 17 and 20  
 
 
@@ -72,7 +72,7 @@ train_model.py:
       trn: COCO_trn.json
       val: COCO_val.json
       tst: COCO_tst.json
-  detectron2_config_file: '../../detectron2_config_3bands.yaml' # path relative to the working_folder
+  detectron2_config_file: 'detectron2_config_3bands.yaml' # path relative to the working_folder
   model_weights:
       model_zoo_checkpoint_url: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml"
       
@@ -85,7 +85,7 @@ make_predictions.py:
       val: COCO_val.json
       tst: COCO_tst.json
       # oth: COCO_oth.json
-  detectron2_config_file: '../../detectron2_config_3bands.yaml' # path relative to the working_folder
+  detectron2_config_file: 'detectron2_config_3bands.yaml' # path relative to the working_folder
   model_weights:
       pth_file: 'logs/model_final.pth'
   

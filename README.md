@@ -43,5 +43,5 @@ python <path to the object detector>/scripts/generate_tilesets.py config.yaml
 python <path to the object detector>/scripts/train_model.py config.yaml 
 python <path to the object detector>/scripts/make_predictions.py config.yaml
 python <path to the object detector>/scripts/assess_predictions.py config.yaml
-python scripts/od_procedure/final_metrics.py config.yaml
+python scripts/od_procedure/road_segmentation.py config.yaml
 ```
