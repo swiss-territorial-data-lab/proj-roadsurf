@@ -11,14 +11,7 @@ import time
 from tqdm import tqdm
 import yaml
 
-# # the following lines allow us to import modules from within this file's parent folder
-# from inspect import getsourcefile
-# current_path = os.path.abspath(getsourcefile(lambda:0))
-# current_dir = os.path.dirname(current_path)
-# parent_dir = current_dir[:current_dir.rfind(os.path.sep)]
-# sys.path.insert(0, parent_dir)
 sys.path.insert(0, 'scripts')
-
 import fct_misc
 
 logging.config.fileConfig('logging.conf')
@@ -80,7 +73,7 @@ else:
         ZOOM_LEVEL = cfg['zoom_level']
 
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
-path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'obj_detector/json'))
+path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json_inputs'))
 
 # Define functions --------------------------------------------
 
@@ -301,6 +294,7 @@ if GENERATE_LABELS:
 
     if OK_TILES:
         if ZOOM_LEVEL==18:
+            logger.info('Only the tiles juged as ok will be used')
             tiles_table=gpd.read_file(OK_TILES)
             tiles_table.replace('-','0.5', inplace=True)
             verified_tiles=tiles_table[~tiles_table['OK'].isna()].copy()
@@ -395,9 +389,9 @@ if GENERATE_LABELS:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append(os.path.join(path_json, f'other_labels.geojson'))
 
-    if OK_TILES:
-        tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-        written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
+    # if OK_TILES:
+    #     tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+    #     written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
 
 logger.info('All done!')
 logger.info('Written files:')

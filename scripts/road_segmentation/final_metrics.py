@@ -10,13 +10,7 @@ import plotly.graph_objects as go
 
 from tqdm import tqdm
 
-# the following lines allow us to import modules from within this file's parent folder
-from inspect import getsourcefile
-current_path = os.path.abspath(getsourcefile(lambda:0))
-current_dir = os.path.dirname(current_path)
-parent_dir = current_dir[:current_dir.rfind(os.path.sep)]
-sys.path.insert(0, parent_dir)
-
+sys.path.insert(0, 'scripts')
 import fct_misc
 
 logging.config.fileConfig('logging.conf')
@@ -36,26 +30,22 @@ with open(args.config_file) as fp:
 
 # Define constants ------------------------------------
 
-DEBUG_MODE=cfg['debug_mode']
 CLASSES=['artificial', 'natural']
 
 INITIAL_FOLDER=cfg['initial_folder']
-# PROCESSED_FOLDER=cfg['processed_folder']
+PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
 
 ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
 
-GROUND_TRUTH=os.path.join(FINAL_FOLDER, cfg['input']['ground_truth'])
-# GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
-if 'layer' in cfg['input'].keys():
-    LAYER=cfg['input']['layer']
+GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
 if 'other_labels' in cfg['input'].keys():
-    OTHER_LABELS=os.path.join(FINAL_FOLDER, cfg['input']['other_labels'])
+    OTHER_LABELS=os.path.join(PROCESSED_FOLDER, cfg['input']['other_labels'])
 else:
     OTHER_LABELS=None
 
 PREDICTIONS=cfg['input']['to_evaluate']
-CONSIDERED_TILES=os.path.join(FINAL_FOLDER, cfg['input']['considered_tiles'])
+CONSIDERED_TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['considered_tiles'])
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 
@@ -177,10 +167,12 @@ def show_metrics(metrics_by_class, global_metrics):
     '''
 
     for metric in metrics_by_class.itertuples():
-        logger.info('%s %s', f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+        logger.info('%s %s',
+            f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
             f"and a recall of {round(metric.Rk, 2)}")
 
-    logger.info('%s %s %s', f"The final f1-score is {global_metrics.f1w[0]}", 
+    logger.info('%s %s %s',
+        f"The final f1-score is {global_metrics.f1w[0]}", 
         f"with a precision of {round(global_metrics.Pw[0],2)} and a recall of",
         f"{round(global_metrics.Rw[0],2)}.")
 
@@ -197,8 +189,9 @@ if OTHER_LABELS:
     ground_truth=pd.concat([ground_truth, other_labels], ignore_index=True)
 
 predictions=gpd.GeoDataFrame()
-for dataset_name in PREDICTIONS.values():
-    dataset=gpd.read_file(os.path.join(FINAL_FOLDER, dataset_name))
+for dataset_acronym in PREDICTIONS.keys():
+    dataset=gpd.read_file(os.path.join(PROCESSED_FOLDER, PREDICTIONS[dataset_acronym]))
+    dataset['dataset']=dataset_acronym
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
 predictions.drop(columns=['pred_class'], inplace=True)

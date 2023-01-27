@@ -38,10 +38,10 @@ All the scripts can be configured through the file `config.yaml`. <br>
 In order to reproduce the results of the project, the initial data are available in the `script/data`.<br>
 The method can be run with the following commands:
 ```bash
-python scripts/road_segmentation/prepare_data_od.py config.yaml
+python scripts/road_segmentation/prepare_data_od.py
 python <path to the object detector>/scripts/generate_tilesets.py config.yaml
-python <path to the object detector>/scripts/train_model.py config.yaml 
+python <path to the object detector>/scripts/train_model.py config.yaml
 python <path to the object detector>/scripts/make_predictions.py config.yaml
 python <path to the object detector>/scripts/assess_predictions.py config.yaml
-python scripts/road_segmentation/final_metrics.py config.yaml
+python scripts/road_segmentation/final_metrics.py
 ```
