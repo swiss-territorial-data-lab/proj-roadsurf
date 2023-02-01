@@ -1,6 +1,5 @@
-01_Documentation*
-04_Reports*
 output*
+final_roads*
 
 # Byte-compiled files
 **/__pycache__/
@@ -8,4 +7,4 @@ output*
 *$py.class
 
 # Jupyter notebook checkpoints
-03_Scipts/.ipynb
+scripts/.ipynb

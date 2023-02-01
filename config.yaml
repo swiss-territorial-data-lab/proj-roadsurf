@@ -20,28 +20,12 @@ prepare_data_od.py:
   zoom_level: 18  # keep between 17 and 20  
 
 
-final_metrics.py:
-  initial_folder: data
-  processed_folder: outputs
-  final_folder: outputs/final
-  input:
-    road_param: roads_parameters.xlsx
-    ground_truth: json_inputs/ground_truth_labels.geojson
-    # other_labels: json_inputs/other_labels.geojson
-    considered_tiles: obj_detector/split_aoi_tiles.geojson
-    to_evaluate:
-      trn: obj_detector/trn_predictions.geojson
-      val: obj_detector/val_predictions.geojson
-      tst: obj_detector/tst_predictions.geojson
-      # oth: oth_predictions.geojson 
-
-
 generate_tilesets.py:
   debug_mode: false
   datasets:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
-    # other_labels_geojson: outputs/json_inputs/other_labels.geojson
+    other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
       url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest
@@ -84,22 +68,39 @@ make_predictions.py:
       trn: COCO_trn.json
       val: COCO_val.json
       tst: COCO_tst.json
-      # oth: COCO_oth.json
-  detectron2_config_file: /../../detectron2_config_3bands.yaml # path relative to the working_folder
+      oth: COCO_oth.json
+  detectron2_config_file: ../../detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: 'logs/model_final.pth'
+      pth_file: 'logs/model_0001999.pth'
   
 assess_predictions.py:
   datasets:
-    ground_truth_labels_geojson: outputs/obj_detector/json_inputs/ground_truth_labels.geojson
+    ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
     image_metadata_json: outputs/obj_detector/img_metadata.json
     split_aoi_tiles_geojson: outputs/obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
     predictions:
       trn: outputs/obj_detector/trn_predictions_at_0dot05_threshold.pkl
       val: outputs/obj_detector/val_predictions_at_0dot05_threshold.pkl
       tst: outputs/obj_detector/tst_predictions_at_0dot05_threshold.pkl
-      # oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
+      oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
   output_folder: outputs/obj_detector
+
+
+  final_metrics.py:
+  initial_folder: data
+  processed_folder: outputs
+  final_folder: outputs/final
+  input:
+    road_param: roads_parameters.xlsx
+    ground_truth: json_inputs/ground_truth_labels.geojson
+    # other_labels: json_inputs/other_labels.geojson
+    considered_tiles: obj_detector/split_aoi_tiles.geojson
+    labels_id: obj_detector/labels_id.json
+    to_evaluate:
+      trn: obj_detector/trn_predictions.geojson
+      val: obj_detector/val_predictions.geojson
+      tst: obj_detector/tst_predictions.geojson
+      # oth: oth_predictions.geojson 
 
 
 # Procedure based on a supervised classification

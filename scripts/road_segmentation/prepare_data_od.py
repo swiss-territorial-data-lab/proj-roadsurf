@@ -304,6 +304,10 @@ if GENERATE_LABELS:
 
             tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles[['title','OK']], how='inner', on='title')
 
+            logger.warning('%s %s',
+                    'When using only the ok tiles, it is advised to include the oth dataset',
+                    'in the generation of the tilesets to ensure the correct selection of the tiles.')
+
         else:
             ok_tiles_z18=gpd.read_file(os.path.join(path_json, 'ok_tiles_aoi_z18_221212.geojson'))
             if ZOOM_LEVEL>18:

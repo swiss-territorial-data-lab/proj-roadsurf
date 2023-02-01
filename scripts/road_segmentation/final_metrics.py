@@ -19,18 +19,20 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-parser.add_argument('config_file', type=str, help='a YAML config file')
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
+# parser.add_argument('config_file', type=str, help='a YAML config file')
+# args = parser.parse_args()
 
-logger.info(f"Using {args.config_file} as config file.")
-with open(args.config_file) as fp:
-        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+# logger.info(f"Using {args.config_file} as config file.")
+# with open(args.config_file) as fp:
+#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+
+logger.info(f"Using config.yaml as config file.")
+with open('config.yaml') as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
 
 
 # Define constants ------------------------------------
-
-CLASSES=['artificial', 'natural']
 
 INITIAL_FOLDER=cfg['initial_folder']
 PROCESSED_FOLDER=cfg['processed_folder']
@@ -46,6 +48,7 @@ else:
 
 PREDICTIONS=cfg['input']['to_evaluate']
 CONSIDERED_TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['considered_tiles'])
+LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['input']['labels_id'])
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 
@@ -117,13 +120,13 @@ def get_balanced_accuracy(comparison_df, CLASSES):
 
     return metrics_df, global_metrics_df
 
-def get_corresponding_class(row):
+def get_corresponding_class(row, labels_id):
     'Get the class in words from the class ids out of the object detector with the method apply.'
 
     if row['pred_class']==0:
-        return 'artificial'
+        return labels_id.loc[labels_id['id']==0, 'name'].item()
     elif row['pred_class']==1:
-        return 'natural'
+        return labels_id.loc[labels_id['id']==0, 'name'].item()
     else:
         logger.warning(f"Unexpected class: {row['pred_class']}")
         sys.exit(1)
@@ -188,12 +191,15 @@ if OTHER_LABELS:
     other_labels=gpd.read_file(OTHER_LABELS)
     ground_truth=pd.concat([ground_truth, other_labels], ignore_index=True)
 
+labels_id=pd.read_json(LABELS_ID, orient='index')
+CLASSES=labels_id['name'].unique().tolist()
+
 predictions=gpd.GeoDataFrame()
 for dataset_acronym in PREDICTIONS.keys():
     dataset=gpd.read_file(os.path.join(PROCESSED_FOLDER, PREDICTIONS[dataset_acronym]))
     dataset['dataset']=dataset_acronym
     predictions=pd.concat([predictions, dataset], ignore_index=True)
-predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row), axis=1)
+predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row, labels_id), axis=1)
 predictions.drop(columns=['pred_class'], inplace=True)
 del dataset
 
@@ -220,9 +226,9 @@ buffered_quarries_4326=buffered_quarries.to_crs(epsg=4326)
 fct_misc.test_crs(filtered_ground_truth.crs, buffered_quarries_4326.crs)
 
 roads_in_quarries=gpd.sjoin(filtered_ground_truth, buffered_quarries_4326, predicate='within')
-# filename='roads_in_quarries.shp'
-# roads_in_quarries.to_file(os.path.join(shp_gpkg_folder, filename))
-# written_files.append(os.path.join(shp_gpkg_folder, filename))
+filepath=os.path.join(shp_gpkg_folder, 'roads_in_quarries.shp')
+roads_in_quarries.to_file(filepath)
+written_files.append(os.path.join(filepath))
 
 filtered_ground_truth=filtered_ground_truth[~filtered_ground_truth['OBJECTID'].isin(
                                     roads_in_quarries['OBJECTID'].unique().tolist())] 
@@ -285,7 +291,7 @@ for threshold in thresholds:
 
         intersecting_predictions=valid_pred_roads[valid_pred_roads['OBJECTID']==road_id].copy()
 
-        groups=intersecting_predictions.groupby(['pred_class_name']).sum()
+        groups=intersecting_predictions.groupby(['pred_class_name']).sum(numeric_only=True)
         if 'natural' in groups.index:
             if groups.loc['natural', 'weighted_score']==0:
                 natural_index=0
@@ -375,13 +381,13 @@ print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
 show_metrics(best_by_class_metrics, best_global_metrics)
 
-filename='types_from_detections.shp'
-best_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
-written_files.append('final/shp_gpkg/' + filename)
+filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
+best_comparison_df.to_file(filepath)
+written_files.append(filepath)
 
-filename='types_from_all_detections.shp'
-all_preds_comparison_df.to_file(os.path.join(shp_gpkg_folder, filename))
-written_files.append('final/shp_gpkg/' + filename)
+filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
+all_preds_comparison_df.to_file(filepath)
+written_files.append(filepath)
 
 print('\n')
 logger.info('-- Calculating the accuracy...')
@@ -464,10 +470,9 @@ print('\n')
 logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
 show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
-shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
-filename='filtered_types_from_detections.shp'
-best_filtered_results.to_file(os.path.join(shp_gpkg_folder, filename))
-written_files.append('final/shp_gpkg/' + filename)
+filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
+best_filtered_results.to_file(filepath)
+written_files.append(filepath)
 
 print('\n')
 
@@ -686,42 +691,6 @@ fig.update_layout(xaxis_title="confidance threshold", yaxis_title="bin accuracy"
 file_to_write = os.path.join(images_folder, f'reliability_diagram.html')
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
-
-# Make histograms of the score depending on the tag.
-parameters={'artificial': 'art_score',
-            'natural': 'nat_score'}
-
-for cover_type in parameters.keys():
-    results=best_filtered_results[best_filtered_results['cover_type']==cover_type]
-    hist_artificial=results.plot.hist(column=[parameters[cover_type]], by='tag',
-                                    range=(0, 1.0),
-                                    bins=20,
-                                    title=f'Repartition of the class score depending on the tag',
-                                    figsize=(8,6),
-                                    grid=True, 
-                                    ec='black',
-                                    )
-    fig = hist_artificial[0].get_figure()
-    fig.tight_layout() 
-    file_to_write = os.path.join(images_folder, f'histogram_{cover_type}_scores_per_tag.jpeg')
-    fig.savefig(file_to_write, bbox_inches='tight')
-    written_files.append(file_to_write)
-
-determined_roads=best_filtered_results[~best_filtered_results['cover_type'].isin(['undetermined', 'undetected'])]
-hist_diff_score=determined_roads.plot.hist(column=['diff_score'], by=['tag', 'cover_type'],
-                                range=(0, 1.0),
-                                bins=20,
-                                title=f'Repartition of the class score depending on the tag',
-                                figsize=(5, 10),
-                                grid=True,
-                                ec='black',
-                                )
-fig = hist_diff_score[0].get_figure()
-file_to_write = os.path.join(images_folder, f'histogram_diff_scores_per_tag_and_cover.jpeg')
-fig.tight_layout() 
-fig.savefig(file_to_write, bbox_inches='tight')
-written_files.append(file_to_write)
-
 
 logger.info('The following files were written:')
 for file in written_files:
