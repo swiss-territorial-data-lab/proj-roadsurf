@@ -1,4 +1,4 @@
-# Procedure with the object detector
+# Procedure for automatic road detection with the object detector
 
 prepare_data_od.py:
   tasks:
@@ -18,7 +18,6 @@ prepare_data_od.py:
   output_folder: outputs
   # ok_tiles: <relative path from the output folder>
   zoom_level: 18  # keep between 17 and 20  
-
 
 generate_tilesets.py:
   debug_mode: false
@@ -85,7 +84,6 @@ assess_predictions.py:
       oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
   output_folder: outputs/obj_detector
 
-
   final_metrics.py:
   initial_folder: data
   processed_folder: outputs
@@ -117,7 +115,7 @@ prepare_data.py:
       roads_param: roads_parameters.xlsx
       forests: swissTLM3D/forests.shp
       aoi: AOI/aoi.shp
-  output_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed
+  output_folder: outputs/processed
 
 
 statistical_analysis.py:
@@ -130,7 +128,7 @@ statistical_analysis.py:
       images: /obj_detector/all-images
       roads: /shapefiles_gpkg/roads_polygons.shp
       tiles: /json/tiles_aoi_z18.geojson
-  final_folder: /mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final
+  final_folder: outputs/final
   param:
     pixel_threshold: 10
     max_confidence: 12.5

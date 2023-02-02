@@ -20,14 +20,6 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-# parser.add_argument('config_file', type=str, help='a YAML config file')
-# args = parser.parse_args()
-
-# logger.info(f"Using {args.config_file} as config file.")
-# with open(args.config_file) as fp:
-#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
-
 logger.info(f"Using config.yaml as config file.")
 with open('config.yaml') as fp:
         cfg = yaml.load(fp, Loader=yaml.FullLoader)['prepare_data_od.py']
@@ -54,7 +46,7 @@ else:
     AOI = os.path.join(INPUT_DIR, INPUT['input_files']['aoi'])
 
     OUTPUT_DIR = cfg['output_folder']
-    
+
     NOT_ROAD=[12, 13, 14, 19, 22, 23]
     KUNSTBAUTE_TO_KEEP=[100, 200]
     BELAGSART_TO_KEEP=[100, 200]
@@ -120,13 +112,13 @@ if DETERMINE_ROAD_SURFACES:
 
     uncovered_roads['road_len']=round(uncovered_roads.length,3)
 
-    # Buffer the roads
+    # Buffer the roads from lines to road width
     logger.info('-- Buffering the roads...')
 
     buffered_roads=uncovered_roads.copy()
     buffered_roads['geometry']=uncovered_roads.buffer(uncovered_roads['Width']/2, cap_style=2)
 
-    ## Do not let roundabout parts make artifacts
+    ## Prevent roundabout area to provoke artifacts
     buff_geometries=[]
     for geom in buffered_roads['geometry'].values:
         if geom.geom_type == 'MultiPolygon':
@@ -327,7 +319,8 @@ if GENERATE_LABELS:
                                             restricted_aoi_training_4326[['KBNUM', 'geometry']],
                                             how='inner')
         tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
-    
+
+    # Attribute object category and supercategory to labels    
     labels_gdf_2056=non_forest_roads[non_forest_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)].copy()
     labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
     labels_gdf_2056['SUPERCATEGORY']='road'
@@ -346,7 +339,7 @@ if GENERATE_LABELS:
     # the following two lines make sure that no object is counted more than once in case it intersects multiple tiles
     GT_labels_gdf = GT_labels_gdf[labels_gdf.columns]
     GT_labels_gdf.drop_duplicates(inplace=True)
-    OTH_labels_gdf = labels_gdf[ ~labels_gdf.index.isin(GT_labels_gdf.index)]
+    OTH_labels_gdf = labels_gdf[~labels_gdf.index.isin(GT_labels_gdf.index)]
 
     try:
         assert( len(labels_gdf) == len(GT_labels_gdf) + len(OTH_labels_gdf) ),\
@@ -393,9 +386,9 @@ if GENERATE_LABELS:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append(os.path.join(path_json, f'other_labels.geojson'))
 
-    # if OK_TILES:
-    #     tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-    #     written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
+    if OK_TILES:
+        tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+        written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
 
 logger.info('All done!')
 logger.info('Written files:')
