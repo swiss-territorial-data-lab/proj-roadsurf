@@ -47,7 +47,7 @@ else:
     OTHER_LABELS=None
 
 PREDICTIONS=cfg['input']['to_evaluate']
-CONSIDERED_TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['considered_tiles'])
+TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['tiles'])
 LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['input']['labels_id'])
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
@@ -126,9 +126,9 @@ def get_corresponding_class(row, labels_id):
     if row['pred_class']==0:
         return labels_id.loc[labels_id['id']==0, 'name'].item()
     elif row['pred_class']==1:
-        return labels_id.loc[labels_id['id']==0, 'name'].item()
+        return labels_id.loc[labels_id['id']==1, 'name'].item()
     else:
-        logger.warning(f"Unexpected class: {row['pred_class']}")
+        logger.error(f"Unexpected class: {row['pred_class']}")
         sys.exit(1)
 
 def determine_category(row):
@@ -139,7 +139,7 @@ def determine_category(row):
     if row['BELAGSART']==200:
         return 'natural'
     else:
-        logger.warning(f"Unexpected class: {row['BELAGSART']}")
+        logger.error(f"Unexpected class: {row['BELAGSART']}")
         sys.exit(1)
         # return 'unknown'
 
@@ -156,12 +156,12 @@ def get_tag(row):
         elif pred_class!=gt_class:
              return 'wrong class'
         else:
-            logger.warning(f'Unexpected configuration: prediction class is {pred_class} and ground truth class is {gt_class}.')
+            logger.error(f'Unexpected configuration: prediction class is {pred_class} and ground truth class is {gt_class}.')
             sys.exit(1)
 
 def show_metrics(metrics_by_class, global_metrics):
     '''
-    Print the by class precision and recall and the global precision, recall and f1-score
+    Print the by-class precision and recall and the global precision, recall and f1-score
 
     - metrics_by_class: The by-class metrics as given by the function get_balanced_accuracy()
     - global_metrics: The global metrics as given by the function get_balanced_accuracy()
@@ -192,7 +192,6 @@ if OTHER_LABELS:
     ground_truth=pd.concat([ground_truth, other_labels], ignore_index=True)
 
 labels_id=pd.read_json(LABELS_ID, orient='index')
-CLASSES=labels_id['name'].unique().tolist()
 
 predictions=gpd.GeoDataFrame()
 for dataset_acronym in PREDICTIONS.keys():
@@ -201,13 +200,21 @@ for dataset_acronym in PREDICTIONS.keys():
     predictions=pd.concat([predictions, dataset], ignore_index=True)
 predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row, labels_id), axis=1)
 predictions.drop(columns=['pred_class'], inplace=True)
-del dataset
 
-considered_tiles=gpd.read_file(CONSIDERED_TILES)
+tiles=gpd.read_file(TILES)
+considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())]
 
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'quarries/quarries.shp'))
 
+del dataset, tiles
+
 # Information treatment ----------------------------
+
+logger.info('Possible classes:')
+for combination in labels_id.itertuples():
+        print(f"- {combination.id}: {combination.name}, {combination.supercategory}")
+CLASSES=labels_id['name'].unique().tolist()
+
 logger.info('Filtering the GT for the roads of interest...')
 filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
 filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
@@ -330,7 +337,7 @@ for threshold in thresholds:
     try:
         assert(comparison_df.shape[0]==visible_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
     except Exception as e:
-        logger.warning(e)
+        logger.error(e)
         sys.exit(1)
 
     comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
@@ -403,7 +410,6 @@ logger.info(f"{round(per_missing_roads,2)}% of the roads were not found.")
 logger.info(f"{per_wrong_roads}% of the roads had the wrong road type.")
 
 for cover_type in ['undetected', 'undetermined']:
-    print('\n')
     per_type_roads_100=round(best_comparison_df[
                                         (best_comparison_df['cover_type']==cover_type) &
                                         (best_comparison_df['CATEGORY']=='artificial')
@@ -415,7 +421,7 @@ for cover_type in ['undetected', 'undetermined']:
                                         ].shape[0]/best_comparison_df.shape[0]*100,2)
 
     logger.info(f"{per_type_roads_100}% of the roads are {cover_type} and have the artificial type")
-    print(f"{per_type_roads_200}% of the roads are {cover_type} and have the natural type")
+    logger.info(f"{per_type_roads_200}% of the roads are {cover_type} and have the natural type")
 
 print('\n')
 

@@ -71,7 +71,7 @@ make_predictions.py:
       oth: COCO_oth.json
   detectron2_config_file: ../../detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: 'logs/model_0001999.pth'
+      pth_file: 'logs/model_0008499.pth'
   
 assess_predictions.py:
   datasets:
@@ -86,7 +86,7 @@ assess_predictions.py:
   output_folder: outputs/obj_detector
 
 
-  final_metrics.py:
+final_metrics.py:
   initial_folder: data
   processed_folder: outputs
   final_folder: outputs/final
@@ -94,13 +94,13 @@ assess_predictions.py:
     road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson
     # other_labels: json_inputs/other_labels.geojson
-    considered_tiles: obj_detector/split_aoi_tiles.geojson
+    tiles: obj_detector/split_aoi_tiles.geojson
     labels_id: obj_detector/labels_id.json
     to_evaluate:
       trn: obj_detector/trn_predictions.geojson
       val: obj_detector/val_predictions.geojson
       tst: obj_detector/tst_predictions.geojson
-      # oth: oth_predictions.geojson 
+      # oth: obj_detector/oth_predictions.geojson 
 
 
 # Procedure based on a supervised classification

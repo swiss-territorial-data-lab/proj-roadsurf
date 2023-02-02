@@ -263,7 +263,7 @@ if GENERATE_TILES_INFO:
         if not tiles_intersects_roads.empty:
             tile_id_to_exclude.extend(tiles_intersects_roads['title'].unique().tolist())
     tile_id_to_exclude=list(dict.fromkeys(tile_id_to_exclude))
-    logger.info(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
+    logger.warning(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
 
     tiles_in_raoi_w_unknown.drop_duplicates('geometry', inplace=True)
     tiles_in_raoi_w_unknown.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
@@ -272,7 +272,7 @@ if GENERATE_TILES_INFO:
     tiles_in_restricted_aoi=tiles_in_raoi_w_unknown[~tiles_in_raoi_w_unknown['title'].isin(tile_id_to_exclude)].copy()
     tiles_in_restricted_aoi.drop(columns=['OBJECTID'], inplace=True)
     tiles_in_restricted_aoi.reset_index(drop=True, inplace=True)
-    logger.info(f"{tiles_in_raoi_w_unknown.shape[0]-tiles_in_restricted_aoi.shape[0]} have been excluded.")
+    logger.warning(f"{tiles_in_raoi_w_unknown.shape[0]-tiles_in_restricted_aoi.shape[0]} have been excluded.")
 
     logger.info('-- Setting a formatted id...')
     xyz=[]

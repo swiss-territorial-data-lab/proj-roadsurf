@@ -90,7 +90,7 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
             fill=[no_data]*max_length
             dico[f'band{band}']=np.append(dico[f'band{band}'], fill[length_bands[band-1]:])
 
-            logger.info(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the tile {tile[-18:]} and' +
+            logger.warning(f'{max_length-length_bands[band-1]} pixels was/were missing on the band {band} on the tile {tile[-18:]} and' +
                         f' got replaced with the value used of no data ({no_data}).')
 
     dico.update(**kwargs)
@@ -175,9 +175,9 @@ def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
         assert(poly_gdf[poly_gdf.is_valid==False].shape[0]==0), \
             f"{poly_gdf[poly_gdf.is_valid==False].shape[0]} geometries are invalid {f' among the {gdf_obj_name}' if gdf_obj_name else ''}."
     except Exception as e:
-        logger.warning(e)
+        logger.error(e)
         if correct:
-            logger.info("Correction of the invalid geometries with a buffer of 0 m...")
+            logger.warning("Correction of the invalid geometries with a buffer of 0 m...")
             corrected_poly=poly_gdf.copy()
             corrected_poly.loc[corrected_poly.is_valid==False,'geometry']= \
                             corrected_poly[corrected_poly.is_valid==False]['geometry'].buffer(0)
