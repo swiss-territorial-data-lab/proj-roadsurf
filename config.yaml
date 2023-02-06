@@ -12,7 +12,7 @@ prepare_data_od.py:
       roads_param: roads_parameters.xlsx
       forests: swissTLM3D/forests.shp
       aoi: AOI/aoi.shp
-      # restricted_aoi_training: AOI/temp_AOI_Prototyp_Belagsarten_2tiles.shp
+      # restricted_aoi_training: AOI/2_tiles_AOI.shp
   processed_input:
     roads_for_labels: roads_for_OD.shp
   output_folder: outputs
@@ -25,7 +25,7 @@ generate_tilesets.py:
   datasets:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
-    other_labels_geojson: outputs/json_inputs/other_labels.geojson
+    # other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
       url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest
@@ -68,10 +68,10 @@ make_predictions.py:
       trn: COCO_trn.json
       val: COCO_val.json
       tst: COCO_tst.json
-      oth: COCO_oth.json
+      # oth: COCO_oth.json
   detectron2_config_file: ../../detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: 'logs/model_0008499.pth'
+      pth_file: 'logs/model_final.pth'
   
 assess_predictions.py:
   datasets:
@@ -82,7 +82,7 @@ assess_predictions.py:
       trn: outputs/obj_detector/trn_predictions_at_0dot05_threshold.pkl
       val: outputs/obj_detector/val_predictions_at_0dot05_threshold.pkl
       tst: outputs/obj_detector/tst_predictions_at_0dot05_threshold.pkl
-      oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
+      # oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
   output_folder: outputs/obj_detector
 
 

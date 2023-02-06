@@ -8,6 +8,8 @@ import geopandas as gpd
 import numpy as np
 import plotly.graph_objects as go
 
+from shapely.affinity import scale
+
 from tqdm import tqdm
 
 sys.path.insert(0, 'scripts')
@@ -131,6 +133,41 @@ def get_corresponding_class(row, labels_id):
         logger.error(f"Unexpected class: {row['pred_class']}")
         sys.exit(1)
 
+def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
+    '''
+    Clip the labels to the tiles
+    Copied from the misc functions of the object detector 
+    cf. https://github.com/swiss-territorial-data-lab/object-detector/blob/master/helpers/misc.py
+
+    - labels_gdf: geodataframe with the labels
+    - tiles_gdf: geodataframe of the tiles
+    - fact: factor to scale the tiles before clipping
+    return: a geodataframe with the labels clipped to the tiles
+    '''
+
+    tiles_gdf['tile_geometry'] = tiles_gdf['geometry']
+        
+    assert(labels_gdf.crs == tiles_gdf.crs)
+    
+    labels_tiles_sjoined_gdf = gpd.sjoin(labels_gdf, tiles_gdf, how='inner', predicate='intersects')
+    
+    def clip_row(row, fact=fact):
+        
+        old_geo = row.geometry
+        scaled_tile_geo = scale(row.tile_geometry, xfact=fact, yfact=fact)
+        new_geo = old_geo.intersection(scaled_tile_geo)
+        row['geometry'] = new_geo
+
+        return row
+
+    clipped_labels_gdf = labels_tiles_sjoined_gdf.apply(lambda row: clip_row(row, fact), axis=1)
+    clipped_labels_gdf.crs = labels_gdf.crs
+
+    clipped_labels_gdf.drop(columns=['tile_geometry', 'index_right'], inplace=True)
+    clipped_labels_gdf.rename(columns={'id': 'tile_id'}, inplace=True)
+
+    return clipped_labels_gdf
+
 def determine_category(row):
     'Get the class in words from the codes out of the swissTLM3D with the method apply.'
 
@@ -248,8 +285,7 @@ considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_
                                 crs=4326
                                 )
 
-fct_misc.test_crs(considered_zone.crs, filtered_ground_truth)
-visible_ground_truth=gpd.overlay(filtered_ground_truth, considered_zone, how="intersection")
+visible_ground_truth=clip_labels(filtered_ground_truth, considered_tiles)
 
 del considered_tiles, tiles_union, considered_zone, 
 
