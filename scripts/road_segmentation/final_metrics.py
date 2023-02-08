@@ -58,6 +58,73 @@ written_files=[]
 
 # Definition of functions ---------------------------
 
+def determine_detected_class(predictions, ground_truth, threshold=0):
+    '''
+    Determine the detected class for the road surface by combining the multiple detections.
+
+    - predictions: dataframe of the predicted road surface
+    - ground_truth: dataframe of the ground truth
+    - threshold: threshold for the confidence score
+    return: a dataframe with the actual and predicted surface type and the combined artificial and natural confidence score,
+        as well as their difference.
+    '''
+
+    final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
+    valid_predictions=predictions[predictions['score']>=threshold]
+    detected_roads_id=valid_predictions['OBJECTID'].unique().tolist()
+
+    for road_id in ground_truth['OBJECTID'].unique().tolist():
+
+        if road_id not in detected_roads_id:
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append('undetected')
+            final_type['nat_score'].append(0)
+            final_type['art_score'].append(0)
+            final_type['diff_score'].append(0)
+            continue
+
+        intersecting_predictions=valid_predictions[valid_predictions['OBJECTID']==road_id].copy()
+
+        groups=intersecting_predictions.groupby(['pred_class_name']).sum(numeric_only=True)
+        if 'natural' in groups.index:
+            if groups.loc['natural', 'weighted_score']==0:
+                natural_index=0
+            else:
+                natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'area_pred_in_label']
+        else:
+            natural_index=0
+        if 'artificial' in groups.index:
+            if groups.loc['artificial', 'weighted_score']==0:
+                artificial_index=0
+            else:
+                artificial_index=groups.loc['artificial', 'weighted_score']/groups.loc['artificial', 'area_pred_in_label']
+        else:
+            artificial_index=0
+
+        if artificial_index==natural_index:
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append('undetermined')
+            final_type['diff_score'].append(0)
+        elif artificial_index > natural_index:
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append('artificial')
+            final_type['diff_score'].append(abs(artificial_index-natural_index))
+        elif artificial_index < natural_index:
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append('natural')
+            final_type['diff_score'].append(abs(artificial_index-natural_index))
+
+        final_type['art_score'].append(round(artificial_index,3))
+        final_type['nat_score'].append(round(natural_index, 3))
+
+    final_type_df=pd.DataFrame(final_type)
+
+    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY', 'gt_type']],
+                                    how='inner', left_on='road_id', right_on='OBJECTID'))
+
+    return comparison_df
+
+
 def get_balanced_accuracy(comparison_df, CLASSES):
     '''
     Get a dataframe with the GT, the predictions and the tags (TP, FP, FN)
@@ -122,17 +189,6 @@ def get_balanced_accuracy(comparison_df, CLASSES):
 
     return metrics_df, global_metrics_df
 
-def get_corresponding_class(row, labels_id):
-    'Get the class in words from the class ids out of the object detector with the method apply.'
-
-    if row['pred_class']==0:
-        return labels_id.loc[labels_id['id']==0, 'name'].item()
-    elif row['pred_class']==1:
-        return labels_id.loc[labels_id['id']==1, 'name'].item()
-    else:
-        logger.error(f"Unexpected class: {row['pred_class']}")
-        sys.exit(1)
-
 def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
     '''
     Clip the labels to the tiles
@@ -167,6 +223,17 @@ def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
     clipped_labels_gdf.rename(columns={'id': 'tile_id'}, inplace=True)
 
     return clipped_labels_gdf
+
+def get_corresponding_class(row, labels_id):
+    'Get the class in words from the class ids out of the object detector with the method apply.'
+
+    if row['pred_class']==0:
+        return labels_id.loc[labels_id['id']==0, 'name'].item()
+    elif row['pred_class']==1:
+        return labels_id.loc[labels_id['id']==1, 'name'].item()
+    else:
+        logger.error(f"Unexpected class: {row['pred_class']}")
+        sys.exit(1)
 
 def determine_category(row):
     'Get the class in words from the codes out of the swissTLM3D with the method apply.'
@@ -224,8 +291,10 @@ road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
 # ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
 ground_truth=gpd.read_file(GROUND_TRUTH)
+ground_truth['gt_type']='gt'
 if OTHER_LABELS:
     other_labels=gpd.read_file(OTHER_LABELS)
+    other_labels['gt_type']='oth'
     ground_truth=pd.concat([ground_truth, other_labels], ignore_index=True)
 
 labels_id=pd.read_json(LABELS_ID, orient='index')
@@ -240,6 +309,7 @@ predictions.drop(columns=['pred_class'], inplace=True)
 
 tiles=gpd.read_file(TILES)
 considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())]
+validation_tiles=tiles[tiles['dataset']=='val']
 
 quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'quarries/quarries.shp'))
 
@@ -285,7 +355,7 @@ considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_
                                 crs=4326
                                 )
 
-visible_ground_truth=clip_labels(filtered_ground_truth, considered_tiles)
+visible_ground_truth=clip_labels(filtered_ground_truth, considered_tiles[['title', 'id', 'geometry']])
 
 del considered_tiles, tiles_union, considered_zone, 
 
@@ -307,7 +377,9 @@ predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_i
 
 del ground_truth, ground_truth_2056, filtered_ground_truth, predictions_2056
 
-logger.info('Calculating the indexes and the metrics per threshold for the score of the predictions...')
+logger.info('Determining the best metrics for the predictions based on the validation dataset...')
+val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val']
+validation_ground_truth=visible_ground_truth[visible_ground_truth.geometry.intersects(validation_tiles.unary_union)]
 
 all_global_metrics=pd.DataFrame()
 all_metrics_by_class=pd.DataFrame()
@@ -318,67 +390,11 @@ tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-    final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
-    valid_pred_roads=predicted_roads_filtered[predicted_roads_filtered['score']>=threshold]
-    detected_roads_id=valid_pred_roads['OBJECTID'].unique().tolist()
+    val_comparison_df=determine_detected_class(val_predictions, validation_ground_truth, threshold)
 
-    for road_id in visible_ground_truth['OBJECTID'].unique().tolist():
+    val_comparison_df['tag']=val_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-        if road_id not in detected_roads_id:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('undetected')
-            final_type['nat_score'].append(0)
-            final_type['art_score'].append(0)
-            final_type['diff_score'].append(0)
-            continue
-
-        intersecting_predictions=valid_pred_roads[valid_pred_roads['OBJECTID']==road_id].copy()
-
-        groups=intersecting_predictions.groupby(['pred_class_name']).sum(numeric_only=True)
-        if 'natural' in groups.index:
-            if groups.loc['natural', 'weighted_score']==0:
-                natural_index=0
-            else:
-                natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'area_pred_in_label']
-        else:
-            natural_index=0
-        if 'artificial' in groups.index:
-            if groups.loc['artificial', 'weighted_score']==0:
-                artificial_index=0
-            else:
-                artificial_index=groups.loc['artificial', 'weighted_score']/groups.loc['artificial', 'area_pred_in_label']
-        else:
-            artificial_index=0
-
-        if artificial_index==natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('undetermined')
-            final_type['diff_score'].append(0)
-        elif artificial_index > natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('artificial')
-            final_type['diff_score'].append(abs(artificial_index-natural_index))
-        elif artificial_index < natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('natural')
-            final_type['diff_score'].append(abs(artificial_index-natural_index))
-
-        final_type['art_score'].append(round(artificial_index,3))
-        final_type['nat_score'].append(round(natural_index, 3))
-
-    final_type_df=pd.DataFrame(final_type)
-
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(visible_ground_truth[['OBJECTID','geometry', 'CATEGORY']],
-                                    how='inner', left_on='road_id', right_on='OBJECTID'))
-    try:
-        assert(comparison_df.shape[0]==visible_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
-    except Exception as e:
-        logger.error(e)
-        sys.exit(1)
-
-    comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
-
-    part_metrics_by_class, part_global_metrics = get_balanced_accuracy(comparison_df, CLASSES)
+    part_metrics_by_class, part_global_metrics = get_balanced_accuracy(val_comparison_df, CLASSES)
 
     part_metrics_by_class['threshold']=threshold
     part_global_metrics['threshold']=threshold
@@ -387,50 +403,89 @@ for threshold in thresholds:
     all_global_metrics=pd.concat([all_global_metrics, part_global_metrics], ignore_index=True)
 
     if threshold==0:
-        all_preds_comparison_df=comparison_df
-
         best_threshold=0
-        best_comparison_df=comparison_df
-        # max_f1=part_global_metrics.f1w[0]
         max_f1=part_global_metrics.f1b[0]
-        
-        best_by_class_metrics=part_metrics_by_class
-        best_global_metrics=part_global_metrics
 
-        print('\n')
-        show_metrics(part_metrics_by_class, part_global_metrics)
-
-    # elif (part_global_metrics.f1w>max_f1)[0]:
     elif (part_global_metrics.f1b>max_f1)[0]:
         best_threshold=threshold
-        best_comparison_df=comparison_df
-        # max_f1=part_global_metrics.f1w[0]
         max_f1=part_global_metrics.f1b[0]
         
-        best_by_class_metrics=part_metrics_by_class
-        best_global_metrics=part_global_metrics
+        best_val_by_class_metrics=part_metrics_by_class
+        best_val_global_metrics=part_global_metrics
 
         print('\n')
         logger.info(f"The best threshold for the f1-score is now {best_threshold}.")
-
-    # else:
-    #     logger.info(part_global_metrics.f1b[0])
 
     tqdm_log.update(1)
 
 tqdm_log.close()
 
+logger.info("Metrics for the validation dataset:")
+show_metrics(best_val_by_class_metrics, best_val_global_metrics)
+
 print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
-show_metrics(best_by_class_metrics, best_global_metrics)
+comparison_df=determine_detected_class(predicted_roads_filtered, visible_ground_truth, best_threshold)
+
+try:
+    assert(comparison_df.shape[0]==visible_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
+except Exception as e:
+    logger.error(e)
+    sys.exit(1)
+
+comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+best_metrics_by_class, best_global_metrics = get_balanced_accuracy(comparison_df, CLASSES)
+
+best_comparison_df=comparison_df.copy()
+
+show_metrics(best_metrics_by_class, best_global_metrics)
 
 filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
 best_comparison_df.to_file(filepath)
 written_files.append(filepath)
 
+print('\n')
+logger.info(f"If we were to keep all the predictions, the metrics would be...")
+all_preds_comparison_df=determine_detected_class(predicted_roads_filtered, visible_ground_truth, 0)
+
+all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+all_preds_metrics_by_class, all_preds_global_metrics = get_balanced_accuracy(all_preds_comparison_df, CLASSES)
+
+show_metrics(all_preds_metrics_by_class, all_preds_global_metrics)
+
 filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
 all_preds_comparison_df.to_file(filepath)
 written_files.append(filepath)
+
+
+if  'oth' in PREDICTIONS.keys():
+    print('\n')
+    logger.info('Metrics based on the trn, tst, val datasets...')
+
+    not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
+    ground_truth_from_gt=visible_ground_truth[visible_ground_truth['gt_type']=='gt']
+    not_oth_comparison_df=determine_detected_class(not_oth_predictions, ground_truth_from_gt, best_threshold)
+
+    not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+    not_oth_metrics_by_class, not_oth_global_metrics = get_balanced_accuracy(not_oth_comparison_df, CLASSES)
+
+    show_metrics(not_oth_metrics_by_class, not_oth_global_metrics)
+
+    print('\n')
+    logger.info('Metrics based on the predictions of the oth dataset...')
+
+    oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
+    ground_truth_from_oth=visible_ground_truth[visible_ground_truth['gt_type']=='oth']
+    oth_comparison_df=determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
+
+    oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+    oth_metrics_by_class, oth_global_metrics = get_balanced_accuracy(oth_comparison_df,  CLASSES)
+
+    show_metrics(oth_metrics_by_class, oth_global_metrics)
 
 print('\n')
 logger.info('-- Calculating the accuracy...')
