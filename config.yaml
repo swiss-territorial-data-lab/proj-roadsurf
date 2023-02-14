@@ -25,7 +25,7 @@ generate_tilesets.py:
   datasets:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
-    # other_labels_geojson: outputs/json_inputs/other_labels.geojson
+    other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
       url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest
@@ -64,6 +64,7 @@ make_predictions.py:
   working_folder: outputs/obj_detector
   log_subfolder: logs
   sample_tagged_img_subfolder: sample_prediction_images
+  image_metadata_json: img_metadata.json
   COCO_files: # relative paths, w/ respect to the working_folder
       trn: COCO_trn.json
       val: COCO_val.json
@@ -72,6 +73,10 @@ make_predictions.py:
   detectron2_config_file: ../../detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
       pth_file: 'logs/model_final.pth'
+  rdp_simplification: # rdp = Ramer-Douglas-Peucker
+    enabled: true
+    epsilon: 0.75 # cf. https://rdp.readthedocs.io/en/latest/
+  score_lower_threshold: 0.05
   
 assess_predictions.py:
   datasets:
@@ -79,10 +84,10 @@ assess_predictions.py:
     image_metadata_json: outputs/obj_detector/img_metadata.json
     split_aoi_tiles_geojson: outputs/obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
     predictions:
-      trn: outputs/obj_detector/trn_predictions_at_0dot05_threshold.pkl
-      val: outputs/obj_detector/val_predictions_at_0dot05_threshold.pkl
-      tst: outputs/obj_detector/tst_predictions_at_0dot05_threshold.pkl
-      # oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.pkl
+      trn: outputs/obj_detector/trn_predictions_at_0dot05_threshold.gpkg
+      val: outputs/obj_detector/val_predictions_at_0dot05_threshold.gpkg
+      tst: outputs/obj_detector/tst_predictions_at_0dot05_threshold.gpkg
+      # oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.gpkg
   output_folder: outputs/obj_detector
 
 

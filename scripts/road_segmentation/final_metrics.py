@@ -459,7 +459,6 @@ filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
 all_preds_comparison_df.to_file(filepath)
 written_files.append(filepath)
 
-
 if  'oth' in PREDICTIONS.keys():
     print('\n')
     logger.info('Metrics based on the trn, tst, val datasets...')
@@ -501,6 +500,7 @@ logger.info(f"{round(per_missing_roads,2)}% of the roads were not found.")
 logger.info(f"{per_wrong_roads}% of the roads had the wrong road type.")
 
 for cover_type in ['undetected', 'undetermined']:
+    print('\n')
     per_type_roads_100=round(best_comparison_df[
                                         (best_comparison_df['cover_type']==cover_type) &
                                         (best_comparison_df['CATEGORY']=='artificial')
