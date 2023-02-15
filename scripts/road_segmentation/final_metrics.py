@@ -420,6 +420,7 @@ for threshold in thresholds:
 
 tqdm_log.close()
 
+print('\n')
 logger.info("Metrics for the validation dataset:")
 show_metrics(best_val_by_class_metrics, best_val_global_metrics)
 

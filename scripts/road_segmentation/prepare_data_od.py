@@ -265,7 +265,7 @@ if GENERATE_TILES_INFO:
     tile_id_to_exclude=list(dict.fromkeys(tile_id_to_exclude))
     logger.warning(f"{len(tile_id_to_exclude)} tiles are to be excluded, because they contain unknown roads.")
 
-    tiles_in_raoi_w_unknown.drop_duplicates('geometry', inplace=True)
+    tiles_in_raoi_w_unknown.drop_duplicates('title', inplace=True)
     tiles_in_raoi_w_unknown.drop(columns=['grid_name', 'grid_crs', 'index_right'], inplace=True)
     tiles_in_raoi_w_unknown.reset_index(drop=True, inplace=True)
 
