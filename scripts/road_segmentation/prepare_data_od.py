@@ -5,7 +5,6 @@ import pandas as pd
 import morecantile
 
 import os, sys
-import argparse
 import logging, logging.config
 import time
 from tqdm import tqdm
@@ -19,14 +18,6 @@ logger = logging.getLogger('root')
 
 tic = time.time()
 logger.info('Starting...')
-
-# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-# parser.add_argument('config_file', type=str, help='a YAML config file')
-# args = parser.parse_args()
-
-# logger.info(f"Using {args.config_file} as config file.")
-# with open(args.config_file) as fp:
-#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 logger.info(f"Using config.yaml as config file.")
 with open('config.yaml') as fp:
@@ -120,7 +111,7 @@ if DETERMINE_ROAD_SURFACES:
 
     uncovered_roads['road_len']=round(uncovered_roads.length,3)
 
-    # Buffer the roads
+    # Buffer the roads from lines to road width
     logger.info('-- Buffering the roads...')
 
     buffered_roads=uncovered_roads.copy()
@@ -135,7 +126,6 @@ if DETERMINE_ROAD_SURFACES:
             buff_geometries.append(geom)
         
     buffered_roads['geometry'] = buff_geometries
-
 
     # Erase overlapping zones of roads buffer
     logger.info('-- Comparing roads for intersections to remove...')
@@ -173,8 +163,8 @@ if DETERMINE_ROAD_SURFACES:
     for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
                 desc='-- Suppressing the overlap of roads with different width'):
         
-        poly1_id = corr_overlap.index[corr_overlap['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
-        poly2_id = corr_overlap.index[corr_overlap['OBJECTID'] == intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
+        poly1_id=corr_overlap.index[corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
+        poly2_id=corr_overlap.index[corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
         
         corr_overlap=fct_misc.polygons_diff_without_artifacts(corr_overlap, poly1_id, poly2_id, keep_everything=True)
 
@@ -393,9 +383,9 @@ if GENERATE_LABELS:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append(os.path.join(path_json, f'other_labels.geojson'))
 
-    # if OK_TILES:
-    #     tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-    #     written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
+    if OK_TILES:
+        tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+        written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
 
 logger.info('All done!')
 logger.info('Written files:')

@@ -216,6 +216,8 @@ rasterio==1.3.2
     #   -r requirements.in
     #   rasterstats
     #   supermercado
+rdp==0.8
+    # via -r requirements.in
 rasterstats==0.17.0
     # via -r requirements.in
 regex==2022.10.31

@@ -1,5 +1,5 @@
 import os, sys
-import yaml, argparse
+import yaml
 import logging, logging.config
 import time
 
@@ -20,14 +20,6 @@ logger = logging.getLogger('root')
 
 tic = time.time()
 logger.info('Starting...')
-
-# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-# parser.add_argument('config_file', type=str, help='a YAML config file')
-# args = parser.parse_args()
-
-# logger.info(f"Using {args.config_file} as config file.")
-# with open(args.config_file) as fp:
-#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 logger.info(f"Using config.yaml as config file.")
 with open('config.yaml') as fp:
