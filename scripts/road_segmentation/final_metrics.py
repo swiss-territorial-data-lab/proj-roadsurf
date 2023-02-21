@@ -1,5 +1,5 @@
 import os, sys
-import yaml, argparse
+import yaml
 import logging, logging.config
 import time
 
@@ -20,14 +20,6 @@ logger = logging.getLogger('root')
 
 tic = time.time()
 logger.info('Starting...')
-
-# parser = argparse.ArgumentParser(description="This script trains a predictive models.")
-# parser.add_argument('config_file', type=str, help='a YAML config file')
-# args = parser.parse_args()
-
-# logger.info(f"Using {args.config_file} as config file.")
-# with open(args.config_file) as fp:
-#         cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 logger.info(f"Using config.yaml as config file.")
 with open('config.yaml') as fp:
@@ -289,7 +281,6 @@ logger.info('Importing files...')
 
 road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
-# ground_truth=gpd.read_file(GROUND_TRUTH, layer=LAYER)
 ground_truth=gpd.read_file(GROUND_TRUTH)
 ground_truth['gt_type']='gt'
 if OTHER_LABELS:
@@ -542,17 +533,14 @@ for threshold in thresholds:
     if threshold==0:
         best_filtered_threshold=0
         best_filtered_results=filtered_results
-        # max_f1=part_global_metrics.f1w[0]
         max_f1=part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=part_metrics_by_class
         best_global_filtered_metrics=part_global_metrics
 
-    # elif (part_global_metrics.f1w>max_f1)[0]:
     elif (part_global_metrics.f1b>max_f1)[0]:
         best_filtered_threshold=threshold
         best_filtered_results=filtered_results
-        # max_f1=part_global_metrics.f1w[0]
         max_f1=part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=part_metrics_by_class
