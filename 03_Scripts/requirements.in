@@ -1,5 +1,6 @@
 pyyaml
-geopandas
+cogeo-mosaic
+geopandas>=0.12
 rasterio
 tqdm
 rasterstats
@@ -8,6 +9,10 @@ matplotlib
 plotly
 sklearn
 rtree
+boto3
+python-dotenv
+logzero
+GDAL==3.0.4
 #openpyxl
 #joblib
 #requests
