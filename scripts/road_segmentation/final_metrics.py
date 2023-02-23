@@ -12,8 +12,8 @@ from shapely.affinity import scale
 
 from tqdm import tqdm
 
-sys.path.insert(0, 'scripts')
-import fct_misc
+sys.path.insert(1, 'scripts')
+import functions.fct_misc as fct_misc
 
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('root')
@@ -22,7 +22,7 @@ tic = time.time()
 logger.info('Starting...')
 
 logger.info(f"Using config.yaml as config file.")
-with open('config.yaml') as fp:
+with open('config/config_od.yaml') as fp:
         cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
 
 
@@ -237,7 +237,6 @@ def determine_category(row):
     else:
         logger.error(f"Unexpected class: {row['BELAGSART']}")
         sys.exit(1)
-        # return 'unknown'
 
 def get_tag(row):
         'Compare the class in the prediction and the GT and tag the row as TP, FP or FN with the method apply.'
@@ -397,6 +396,9 @@ for threshold in thresholds:
         best_threshold=0
         max_f1=part_global_metrics.f1b[0]
 
+        best_val_by_class_metrics=part_metrics_by_class
+        best_val_global_metrics=part_global_metrics
+
     elif (part_global_metrics.f1b>max_f1)[0]:
         best_threshold=threshold
         max_f1=part_global_metrics.f1b[0]
@@ -508,7 +510,6 @@ for cover_type in ['undetected', 'undetermined']:
 
 print('\n')
 
-# Test for different threshold on the difference between indices
 logger.info('Searching for the optimal threshold on the difference between indices...')
 filtered_metrics_by_class=pd.DataFrame()
 filtered_global_metrics=pd.DataFrame()
@@ -562,23 +563,8 @@ written_files.append(filepath)
 
 print('\n')
 
-# Filters from data exploration
-# logger.info('Applying filters from data exploration...')
-# comp_df_explo=best_comparison_df.copy()
-
-# comp_df_explo.loc[comp_df_explo['road_len']>1300, 'cover_type']='artificial'
-
-# comp_df_explo.drop(columns=['tag'], inplace=True)
-# comp_df_explo['tag']=comp_df_explo.apply(lambda row: get_tag(row), axis=1)
-
-# class_metrics_post_explo, global_metrics_post_explo=get_balanced_accuracy(comp_df_explo, CLASSES)
-# show_metrics(class_metrics_post_explo, global_metrics_post_explo)
-
-# print('\n')
-
-# If all roads where classified as artificial (baseline)
 if True:
-    logger.info('If all roads were classified as artificial...')
+    logger.info('Baseline: If all roads were classified as artificial...')
     comp_df_all_art=best_comparison_df.copy()
     comp_df_all_art['cover_type']='artificial'
     comp_df_all_art.drop(columns=['tag'], inplace=True)
@@ -588,7 +574,7 @@ if True:
     show_metrics(class_metrics_all_art, global_metrics_all_art)
     print('\n')
 
-# Get the bin accuracy
+
 logger.info('Calculate the bin accuracy to estimate the calibration...')
 accuracy_tables=[]
 bin_accuracy_param={'artificial':['art_score', 'artificial', 'artifical score'],
@@ -617,7 +603,7 @@ for param in bin_accuracy_param.keys():
     df.name=bin_accuracy_param[param][2]
     accuracy_tables.append(df)
 
-# Make the graphs
+
 # Code strongly inspired from the script 'assess_predictions.py' in the object detector.
 logger.info('Make some graphs for the visualization of the impact from the thresholds...')
 images_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))

@@ -7,4 +7,4 @@ final_roads*
 *$py.class
 
 # Jupyter notebook checkpoints
-scripts/.ipynb
+scripts/*.ipynb

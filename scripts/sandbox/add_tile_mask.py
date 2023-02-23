@@ -14,7 +14,7 @@ from rasterio.features import rasterize
 import numpy as np
 from statistics import median
 
-import fct_misc
+import scripts.functions.fct_misc as fct_misc
 
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('root')

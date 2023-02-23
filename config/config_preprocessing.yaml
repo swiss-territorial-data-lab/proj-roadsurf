@@ -1,0 +1,30 @@
+# One time scripts
+
+correct_gt.py:
+  input:
+    input_folder: data
+    input_files:
+      initial_roads: swissTLM3D/roads_lines.shp
+      corrections: swissTLM3D/test_natural_roads_feedback.shp
+
+
+RS_images_to_S3.py:
+  access_key: ...
+  secret_key: ...
+  url: https://s3.pub1.infomaniak.cloud
+  datapath: D:\Export_RS\*
+  bucket: proj-roadsurf
+  outpath: data/images_RS/
+
+tif2cog.py:
+  S3_PREFIX_IN: '02_Data/initial/images_RS'
+  S3_PREFIX_TIF: '02_Data/processed/images_RS/tif_3857'
+  S3_PREFIX_COG: '02_Data/processed/images_RS/cog_3857'
+  WORKDIR: './workdir'
+  NIR_BAND_NO: 1
+  R_BAND_NO: 2
+  G_BAND_NO: 3
+  B_BAND_NO: 4
+  DO_STEP1: True
+  DO_STEP2: True
+  DO_STEP3: True

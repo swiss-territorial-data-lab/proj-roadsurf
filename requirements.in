@@ -5,6 +5,7 @@
 GDAL==3.0.4
 geopandas
 joblib
+kaleido
 matplotlib
 morecantile
 pillow

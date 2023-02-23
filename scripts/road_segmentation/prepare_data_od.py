@@ -5,13 +5,14 @@ import pandas as pd
 import morecantile
 
 import os, sys
+import argparse
+import yaml
 import logging, logging.config
 import time
 from tqdm import tqdm
-import yaml
 
-sys.path.insert(0, 'scripts')
-import fct_misc
+sys.path.insert(1, 'scripts')
+import functions.fct_misc as fct_misc
 
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('root')
@@ -19,13 +20,18 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-logger.info(f"Using config.yaml as config file.")
-with open('config.yaml') as fp:
-        cfg = yaml.load(fp, Loader=yaml.FullLoader)['prepare_data_od.py']
+parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+parser.add_argument('config_file', type=str, help='a YAML config file')
+args = parser.parse_args()
+
+logger.info(f"Using {args.config_file} as config file.")
+
+with open(args.config_file) as fp:
+    cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 # Define constants -----------------------------------------
 
-# Task to do
+# Define tasks to do
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
 GENERATE_TILES_INFO=cfg['tasks']['generate_tiles_info']
 GENERATE_LABELS=cfg['tasks']['generate_labels']
@@ -39,15 +45,20 @@ else:
     INPUT = cfg['input']
     INPUT_DIR =INPUT['input_folder']
 
-    ROADS_IN = os.path.join(INPUT_DIR, INPUT['input_files']['roads'])
+    if DETERMINE_ROAD_SURFACES:
+        ROADS_IN = os.path.join(INPUT_DIR, INPUT['input_files']['roads'])
+        FORESTS = os.path.join(INPUT_DIR, INPUT['input_files']['forests'])
     ROADS_PARAM = os.path.join(INPUT_DIR, INPUT['input_files']['roads_param'])
-    FORESTS = os.path.join(INPUT_DIR, INPUT['input_files']['forests'])
     AOI = os.path.join(INPUT_DIR, INPUT['input_files']['aoi'])
 
     OUTPUT_DIR = cfg['output_folder']
 
+    # Based on the metadata
+    # Remove places, motorail, ferry, marked trace, climbing path and provisory pathes of soft mobility.
     NOT_ROAD=[12, 13, 14, 19, 22, 23]
+    # Only keep roads and uncovered bridges 
     KUNSTBAUTE_TO_KEEP=[100, 200]
+    # Only keep roads with a artificial or natural surface.
     BELAGSART_TO_KEEP=[100, 200]
 
     if 'ok_tiles' in cfg.keys():
@@ -81,14 +92,11 @@ def determine_category(row):
 if DETERMINE_ROAD_SURFACES:
     logger.info('Importing files...')
 
-    ## Geodata
     roads=gpd.read_file(ROADS_IN)
     forests=gpd.read_file(FORESTS)
 
-    ## Other informations
     roads_parameters=pd.read_excel(ROADS_PARAM)
 
-    # Filter the roads to consider
     logger.info('Filtering the considered roads...')
     
     roads_of_interest=roads[~roads['OBJEKTART'].isin(NOT_ROAD)]
@@ -111,13 +119,12 @@ if DETERMINE_ROAD_SURFACES:
 
     uncovered_roads['road_len']=round(uncovered_roads.length,3)
 
-    # Buffer the roads from lines to road width
-    logger.info('-- Buffering the roads...')
+    logger.info('-- Transforming the roads from lines to polygons...')
 
     buffered_roads=uncovered_roads.copy()
     buffered_roads['geometry']=uncovered_roads.buffer(uncovered_roads['Width']/2, cap_style=2)
 
-    ## Prevent roundabout area to provoke artifacts
+    # Erease artifact polygons produced by roundabouts
     buff_geometries=[]
     for geom in buffered_roads['geometry'].values:
         if geom.geom_type == 'MultiPolygon':
@@ -130,21 +137,19 @@ if DETERMINE_ROAD_SURFACES:
     # Erase overlapping zones of roads buffer
     logger.info('-- Comparing roads for intersections to remove...')
 
-    ## For roads of different width
     logger.info('----- Removing overlap between roads of different classes...')
 
     buffered_roads['saved_geom']=buffered_roads.geometry
     joined_roads_in_aoi=gpd.sjoin(buffered_roads,buffered_roads[['OBJECTID','OBJEKTART','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
 
-    ### Drop excessive rows
+    ## Drop excessive rows
     intersected=joined_roads_in_aoi[joined_roads_in_aoi['OBJECTID_2'].notna()].copy()
     intersected_not_itself=intersected[intersected['OBJECTID_1']!=intersected['OBJECTID_2']].copy()
     intersected_roads=intersected_not_itself.drop_duplicates(subset=['OBJECTID_1','OBJECTID_2'])
 
     intersected_roads.reset_index(inplace=True, drop=True)
 
-    ### Sort the roads so that the widest ones come first
-    ### TO DO : automatize this part for when different object classes are kept
+    ## Sort the roads so that the widest ones come first
     intersected_roads.loc[intersected_roads['OBJEKTART_1']==20,'OBJEKTART_1']=8.5
     intersected_roads.loc[intersected_roads['OBJEKTART_1']==21,'OBJEKTART_1']=2.5
 
@@ -156,22 +161,23 @@ if DETERMINE_ROAD_SURFACES:
 
     intersect_other_width.sort_values(by=['KUNSTBAUTE'], ascending=False, inplace=True, ignore_index=True)
 
-    ### Suppress the overlapping intersection
-    ### from https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
+    ## cf. https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
     corr_overlap = buffered_roads.copy()
-
     for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
                 desc='-- Suppressing the overlap of roads with different width'):
         
-        poly1_id=corr_overlap.index[corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_1']].values.astype(int)[0]
-        poly2_id=corr_overlap.index[corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_2']].values.astype(int)[0]
+        poly1_id=corr_overlap.index[
+                corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_1']
+            ].values.astype(int)[0]
+        poly2_id=corr_overlap.index[
+                corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_2']
+            ].values.astype(int)[0]
         
         corr_overlap=fct_misc.polygons_diff_without_artifacts(corr_overlap, poly1_id, poly2_id, keep_everything=True)
 
     corr_overlap.drop(columns=['saved_geom'],inplace=True)
     corr_overlap.set_crs(epsg=2056, inplace=True)
 
-    # Exclude the roads potentially under forest canopy
     logger.info('-- Excluding roads under forest canopy ...')
 
     fct_misc.test_crs(corr_overlap.crs, forests.crs)
@@ -306,7 +312,6 @@ if GENERATE_LABELS:
                 tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
                 
             else:
-                # TODO: generalize the tiles to the correct level or to the level 18 for comparison
                 logger.info('Ok tiles for this zoom not developped yet :(')
 
     if RESTRICTED_AOI_TRAIN:
@@ -349,8 +354,6 @@ if GENERATE_LABELS:
 
     logger.info('Done generating the labels for the object detector...')
 
-    # In the current case, OTH_labels_gdf should be empty
-
 
 # Save results ------------------------------------------------------------------
 logger.info('Saving files...')
@@ -363,16 +366,10 @@ if DETERMINE_ROAD_SURFACES:
 
 if GENERATE_TILES_INFO:
 
-    if not (GENERATE_LABELS and OK_TILES) :
-        # Save in json format for the (to-be) "old" version of generate_tilesets.py
-        # geojson only supports epsg:4326
-        tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
-        tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-        written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
-
-    # Save in gpkg for the (soon-to-be) new version of generate_tilesets.py
-    layername="epsg3857_z" + str(ZOOM_LEVEL) + "_tiles"
-    tiles_in_restricted_aoi.to_file(os.path.join(path_shp_gpkg, 'epsg3857_tiles.gpkg'), driver='GPKG',layer=layername)
+    # geojson only supports epsg:4326
+    tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
+    tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
+    written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
 
     written_files.append(os.path.join(path_shp_gpkg, 'epsg3857_tiles.gpkg'))
 
@@ -383,10 +380,6 @@ if GENERATE_LABELS:
     if not OTH_labels_gdf.empty:
         OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
         written_files.append(os.path.join(path_json, f'other_labels.geojson'))
-
-    if OK_TILES:
-        tiles_in_restricted_aoi_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-        written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
 
 logger.info('All done!')
 logger.info('Written files:')

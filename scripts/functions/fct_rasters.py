@@ -120,10 +120,10 @@ if __name__ == '__main__':
     GENERATE_MOSAIC=False
     CALCULATE_ZONAL_STATS=True
 
-    INITIAL_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/initial/DEM"
-    PROCESSED_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed"
-    DEM_PROCESSED_FOLDER=fct_misc.ensure_dir_exists("/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/processed/DEM")
-    FINAL_FOLDER="/mnt/data-01/gsalamin/proj-roadsurf-b/02_Data/final"
+    INITIAL_FOLDER="data/DEM"
+    PROCESSED_FOLDER="outputs"
+    DEM_PROCESSED_FOLDER=fct_misc.ensure_dir_exists(os.path.join(PROCESSED_FOLDER, 'DEM'))
+    FINAL_FOLDER="outputs/final"
 
     URL_FILE="ch.swisstopo.swissalti3d-nZXjr9Tu_res2m.csv"
     ROADS_POLYGONS="shp_gpkg/types_from_detections.shp"

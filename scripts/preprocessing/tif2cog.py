@@ -304,7 +304,7 @@ if __name__ == "__main__":
     logger.info(f"Using {args.config_file} as config file.")
 
     with open(args.config_file) as fp:
-        cfg = yaml.load(fp, Loader=yaml.FullLoader) #[os.path.basename(__file__)]
+        cfg = yaml.load(fp, Loader=yaml.FullLoader) [os.path.basename(__file__)]
     
     ### --- read config --- ###
     load_dotenv() # take environment variables from .env

@@ -1,26 +1,58 @@
 
 # Determination of the type of road surface
 
+### Table of content
+
+- [Description](#description)
+    - [Goal](#goal)
+    - [Data](#data)
+    - [Method](#method)
+    - [Results](#results)
+- [Installation](#installation)
+- [Getting started](#getting-started)
+- [Other Uses](#other-uses)
+    - [Preprocessing](#preprocessing)
+    - [Statistical procedure](#statistical-procedure)
+
+
 ## Description
 
 ### Goal
-The goal of this project is to classify the roads of Switzerland based on the type of their surface, natural or artificial. This work is currently done by operators of the Swiss Federal Office of Topography (swisstopo) and this is a time-consuming and repetitive task, therefore adapted to the automatization thank to data science. <br>
+The goal of this project is to classify the roads of Switzerland based on the type of their surface, artificial or natural. This work is currently done by operators at the Swiss Federal Office of Topography (swisstopo) and this is a time-consuming and repetitive task, therefore adapted to the automatization thank to data science. <br>
 
 ### Data
-The starting point of the method are the line of the roads from the product swissTLM3D. Only the class "3m Strasse" was a problem for the operator, so the procedure is focused on this particular class. The images used are the ones from the product SWISSIMAGE RS.<br>
+Initial data:
+- [swissTLM3D](https://www.swisstopo.admin.ch/en/geodata/landscape/tlm3d.html):
+    - roads as line,
+    - forests as polygons
+- [SWISSIMAGE](https://www.swisstopo.admin.ch/en/geodata/images/ortho.html):
+    - SWISSIMAGE 10 cm
+
+The starting point of the method are the line of the roads from the product swissTLM3D. Only the class "3m Strasse" was a problem for the operators, so the procedure is focused on this particular class. <br>
+Here, the images used are the ones from the product SWISSIMAGE 10 cm made available by swisstopo in a WMTS service. Better results are achieved when using the product SWISSIMAGE RS and processing it to a WMTS service like proposed in the part [Other uses](#other-uses). However, this procedure is more complicated and time-consuming. <br>
 
 ### Method
-We first searched for statistical differences between the classes in order to perform a supervised classification. As we could not find any significative difference between the roads, we used an artificial intelligence for the instance segmentation for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2).
+We first searched for statistical differences between the classes in order to perform a supervised classification. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2).
 
 ### Results
-The final metrics were ...
+Table of the f1-scores for each class and for the global results: 
+|           	| Training, validation and test area 	| Other area 	|
+|:---          	|:---:                                  |:---: 	        |
+| Artificial 	|               0.955     	            |     0.944    	|
+| Natural    	|               0.475     	            |     0.155    	|
+| Global  	    |               0.737     	            |     0.557    	|
 
+
+When using a f1-score giving the same importance to the two classes (artificial and natural), the final f1-score is 0.737 over the training, validation and test area and 0.557 over the other area. <br>
 
 The detailed documentation can be found on [the technical website of the STDL](https://tech.stdl.ch/).
 
 ## Installation
-In order to run the project, you will need this repository as well as the one of the [object detector](https://github.com/swiss-territorial-data-lab/object-detector).<br>
-A CUDA-capable system is required. <br>
+In order to run the project, you will need :
+- this repository,
+- the repository of the [object detector](https://github.com/swiss-territorial-data-lab/object-detector),
+- a CUDA-capable system.
+
 To prepare the environment:
 
 1. create a Python 3.8 environment
@@ -34,14 +66,59 @@ pip install -r requirements.txt
 ```
 
 ## Getting started
-All the scripts can be configured through the file `config.yaml`. <br>
-In order to reproduce the results of the project, the initial data are available in the `script/data`.<br>
+
+```
+.
+├── config                      # Configuration files for the scripts and detectron2
+├── data                        # Initial data
+├── scripts
+|   ├── functions               # Functions files
+|   ├── preprocessing           # One-time scripts used in preprocessing
+|   ├── road_segmentation       # Scripts used in the procedure based on the road segmentation
+|   ├── sandbox                 # Scripts that were not implemented in the final procedure
+|   ├── statistical_analysis    # Scripts used in the procedure based on the supervised classification
+```
+
+The scripts can be configured through the file `config_od.yaml`. <br>
+
 The method can be run with the following commands:
 ```bash
-python scripts/road_segmentation/prepare_data_od.py
-python <path to the object detector>/scripts/generate_tilesets.py config.yaml
-python <path to the object detector>/scripts/train_model.py config.yaml
-python <path to the object detector>/scripts/make_predictions.py config.yaml
-python <path to the object detector>/scripts/assess_predictions.py config.yaml
+python scripts/road_segmentation/prepare_data_od.py config/config_od.yaml
+python <path to the object detector>/scripts/generate_tilesets.py config/config_od.yaml
+python <path to the object detector>/scripts/train_model.py config/config_od.yaml
+python <path to the object detector>/scripts/make_predictions.py config/config_od.yaml
+python <path to the object detector>/scripts/assess_predictions.py config/config_od.yaml
 python scripts/road_segmentation/final_metrics.py
+```
+
+## Other uses
+
+### Preprocessing
+To reproduce exaclty the procedure described in the technical documentation, you will have to use the product SWISSIMAGE RS instead of SWISSIMAGE 10 cm. We obtained it on a hard disk and transfered it to our S3 cloud with the script `RS_images_to_S3.py`.
+Then, with the help of the script `tif2cog.py`, the images were tranformed from 16-bits TIFF to 8-bits Cloud Optimized GeoTiff files and Titiler was used to access them like tiles in a WMTS service.
+
+```
+python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
+python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
+```
+
+When using the images from Titiler, the url has to be changed in the parameters for the script `generate_tilesets.py`: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest.
+
+In the parameter for detectron2, the pixel means have to be adapted:
+```
+MODEL:
+    PIXEL_MEAN: # BGR order 
+    - 103.53
+    - 116.28
+    - 123.675
+```
+
+### Statistical procedure
+Supervised classification was tested before road segementation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
+
+```
+python scripts/statistical_analysis/prepare_data.py config/config_stats.yaml
+python scripts/road_segmentation/prepare_data_od.py config/config_stats.yaml
+python <path to the object detector>/scripts/generate_tilesets.py config/config_stats.yaml
+python scripts/statistical_analysis/statistical_analysis.py config/config_stats.yaml
 ```
