@@ -10,6 +10,8 @@
     - [Results](#results)
 - [Installation](#installation)
 - [Getting started](#getting-started)
+    - [Folder structure](#folder-structure)
+    - [Workflow](#workflow)
 - [Other Uses](#other-uses)
     - [Preprocessing](#preprocessing)
     - [Statistical procedure](#statistical-procedure)
@@ -76,6 +78,7 @@ pip install -r requirements.txt
 
 ## Getting started
 
+### Folder structure
 ```
 .
 ├── config                      # Configuration files for the scripts and detectron2
@@ -89,9 +92,9 @@ pip install -r requirements.txt
 |   ├── statistical_analysis    # Scripts used in the procedure based on the supervised classification
 ```
 
+### Workflow
 <figure align="center">
 <image src="img/road_segmentation_flow.jpeg" alt="flow for the road segmentation">
-<figcaption align="center">Schematic flow of the procedure for the road segmentation and classification.</figcaption> 
 </figure>
 
 The scripts can be configured through the file `config_od.yaml`. <br>
@@ -130,8 +133,7 @@ MODEL:
 ### Statistical procedure
 
 <figure align="center">
-<image src="img/statistical_flow.jpeg" alt="flow for the statistical procedure">
-<figcaption align="center">Schematic flow of the procedure for the research of a statistical difference between the classes.</figcaption> 
+<image src="img/statistical_flow.jpeg" alt="flow for the research of a statistical differences">
 </figure>
 
 Supervised classification was tested before road segementation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
