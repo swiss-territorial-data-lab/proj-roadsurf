@@ -361,25 +361,26 @@ logger.info('Saving files...')
 written_files=[]
 
 if DETERMINE_ROAD_SURFACES:
-    non_forest_roads.to_file(os.path.join(path_shp_gpkg, 'roads_for_OD.shp'))
-    written_files.append('shapefiles_gpkg/roads_for_OD.shp')
+    filepath=os.path.join(path_shp_gpkg, 'roads_for_OD.shp')
+    non_forest_roads.to_file(filepath)
+    written_files.append(filepath)
 
 if GENERATE_TILES_INFO:
-
     # geojson only supports epsg:4326
     tiles_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
-    tiles_4326.to_file(os.path.join(path_json, 'tiles_aoi.geojson'), driver='GeoJSON')
-    written_files.append(os.path.join(path_json, 'tiles_aoi.geojson'))
-
-    written_files.append(os.path.join(path_shp_gpkg, 'epsg3857_tiles.gpkg'))
+    filepath=os.path.join(path_json, 'tiles_aoi.geojson')
+    tiles_4326.to_file(filepath, driver='GeoJSON')
+    written_files.append(filepath)
 
 if GENERATE_LABELS:
-    GT_labels_gdf.to_file(os.path.join(path_json, 'ground_truth_labels.geojson'), driver='GeoJSON')
-    written_files.append(os.path.join(path_json, 'ground_truth_labels.geojson'))
+    filepath=os.path.join(path_json, 'ground_truth_labels.geojson')
+    GT_labels_gdf.to_file(filepath, driver='GeoJSON')
+    written_files.append(filepath)
 
     if not OTH_labels_gdf.empty:
-        OTH_labels_gdf.to_file(os.path.join(path_json, f'other_labels.geojson'), driver='GeoJSON')
-        written_files.append(os.path.join(path_json, f'other_labels.geojson'))
+        filepath=os.path.join(path_json, f'other_labels.geojson')
+        OTH_labels_gdf.to_file(filepath, driver='GeoJSON')
+        written_files.append(filepath)
 
 logger.info('All done!')
 logger.info('Written files:')

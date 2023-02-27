@@ -27,12 +27,21 @@ Initial data:
     - forests as polygons
 - [SWISSIMAGE](https://www.swisstopo.admin.ch/en/geodata/images/ortho.html):
     - SWISSIMAGE 10 cm
+- Area of interest:
+    - 4 tiles of the 1:25'000 national map situated in the region of the Emmental
 
 The starting point of the method are the line of the roads from the product swissTLM3D. Only the class "3m Strasse" was a problem for the operators, so the procedure is focused on this particular class. <br>
 Here, the images used are the ones from the product SWISSIMAGE 10 cm made available by swisstopo in a WMTS service. Better results are achieved when using the product SWISSIMAGE RS and processing it to a WMTS service like proposed in the part [Other uses](#other-uses). However, this procedure is more complicated and time-consuming. <br>
 
 ### Method
-We first searched for statistical differences between the classes in order to perform a supervised classification. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2).
+
+<figure align="center">
+<image src="img/proj_roadsurf_flow.jpeg" alt="Diagram of the methodology" style="width:60%;">
+<figcaption align="center">Simplified diagram of the methodology for this project.</figcaption> 
+</figure>
+
+We first searched for statistical differences between the classes in order to perform a supervised classification. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2). <br>
+The procedure based on road segmentation is presented in priority here. The statistical procedure can be found under the section [Other uses](#other-uses).
 
 ### Results
 Table of the f1-scores for each class and for the global results: 
@@ -71,6 +80,7 @@ pip install -r requirements.txt
 .
 ├── config                      # Configuration files for the scripts and detectron2
 ├── data                        # Initial data
+├── img                         # Image folder for the readme
 ├── scripts
 |   ├── functions               # Functions files
 |   ├── preprocessing           # One-time scripts used in preprocessing
@@ -78,6 +88,11 @@ pip install -r requirements.txt
 |   ├── sandbox                 # Scripts that were not implemented in the final procedure
 |   ├── statistical_analysis    # Scripts used in the procedure based on the supervised classification
 ```
+
+<figure align="center">
+<image src="img/road_segmentation_flow.jpeg" alt="flow for the road segmentation">
+<figcaption align="center">Schematic flow of the procedure for the road segmentation and classification.</figcaption> 
+</figure>
 
 The scripts can be configured through the file `config_od.yaml`. <br>
 
@@ -87,7 +102,6 @@ python scripts/road_segmentation/prepare_data_od.py config/config_od.yaml
 python <path to the object detector>/scripts/generate_tilesets.py config/config_od.yaml
 python <path to the object detector>/scripts/train_model.py config/config_od.yaml
 python <path to the object detector>/scripts/make_predictions.py config/config_od.yaml
-python <path to the object detector>/scripts/assess_predictions.py config/config_od.yaml
 python scripts/road_segmentation/final_metrics.py
 ```
 
@@ -114,6 +128,12 @@ MODEL:
 ```
 
 ### Statistical procedure
+
+<figure align="center">
+<image src="img/statistical_flow.jpeg" alt="flow for the statistical procedure">
+<figcaption align="center">Schematic flow of the procedure for the research of a statistical difference between the classes.</figcaption> 
+</figure>
+
 Supervised classification was tested before road segementation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
 
 ```
