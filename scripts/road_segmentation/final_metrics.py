@@ -174,7 +174,7 @@ def get_balanced_accuracy(comparison_df, CLASSES):
     if balanced_precision==0 and balanced_recall==0:
         balanced_f1_score=0
     else:
-        balanced_f1_score=round(2*balanced_precision*balanced_recall/(weighted_precision + balanced_recall), 2)
+        balanced_f1_score=round(2*balanced_precision*balanced_recall/(balanced_precision + balanced_recall), 2)
 
     global_metrics_df=pd.DataFrame({'Pw': [weighted_precision], 'Rw': [weighted_recall], 'f1w': [weighted_f1_score],
                                     'Pb': [balanced_precision], 'Rb': [balanced_recall], 'f1b': [balanced_f1_score]})
@@ -557,6 +557,9 @@ print('\n')
 logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
 show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
+if best_filtered_threshold>0:
+    print(f'It would be wise to verify all the results with a score difference lower than {best_filtered_threshold}.')
+
 filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
 best_filtered_results.to_file(filepath)
 written_files.append(filepath)
@@ -586,10 +589,10 @@ for param in bin_accuracy_param.keys():
     bin_values=[]
     threshold_values=[]
     for threshold in thresholds_bins:
-        roads_in_bin=best_filtered_results[
-                                        (best_filtered_results[bin_accuracy_param[param][0]]>threshold-0.5) &
-                                        (best_filtered_results[bin_accuracy_param[param][0]]<=threshold) &
-                                        (best_filtered_results['CATEGORY']==bin_accuracy_param[param][1])
+        roads_in_bin=best_comparison_df[
+                                        (best_comparison_df[bin_accuracy_param[param][0]]>threshold-0.5) &
+                                        (best_comparison_df[bin_accuracy_param[param][0]]<=threshold) &
+                                        (best_comparison_df['CATEGORY']==bin_accuracy_param[param][1])
                                         ]
 
         if not roads_in_bin.empty:

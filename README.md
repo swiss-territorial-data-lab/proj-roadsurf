@@ -26,11 +26,12 @@ The goal of this project is to classify the roads of Switzerland based on the ty
 Initial data:
 - [swissTLM3D](https://www.swisstopo.admin.ch/en/geodata/landscape/tlm3d.html):
     - roads as line,
-    - forests as polygons
+    - forests as polygons,
 - [SWISSIMAGE](https://www.swisstopo.admin.ch/en/geodata/images/ortho.html):
-    - SWISSIMAGE 10 cm
+    - SWISSIMAGE 10 cm,
 - Area of interest:
-    - 4 tiles of the 1:25'000 national map situated in the region of the Emmental
+    - 4 tiles of the 1:25'000 national map situated in the region of the Emmental,
+- quarries as polygons.
 
 The starting point of the method are the line of the roads from the product swissTLM3D. Only the class "3m Strasse" was a problem for the operators, so the procedure is focused on this particular class. <br>
 Here, the images used are the ones from the product SWISSIMAGE 10 cm made available by swisstopo in a WMTS service. Better results are achieved when using the product SWISSIMAGE RS and processing it to a WMTS service like proposed in the part [Other uses](#other-uses). However, this procedure is more complicated and time-consuming. <br>
