@@ -453,7 +453,7 @@ filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
 all_preds_comparison_df.to_file(filepath)
 written_files.append(filepath)
 
-if  'oth' in PREDICTIONS.keys():
+if 'oth' in PREDICTIONS.keys():
     print('\n')
     logger.info('Metrics based on the trn, tst, val datasets...')
 
@@ -511,8 +511,10 @@ for cover_type in ['undetected', 'undetermined']:
 print('\n')
 
 logger.info('Searching for the optimal threshold on the difference between indices...')
-filtered_metrics_by_class=pd.DataFrame()
-filtered_global_metrics=pd.DataFrame()
+gt_filtered_metrics_by_class=pd.DataFrame()
+gt_filtered_global_metrics=pd.DataFrame()
+oth_filtered_metrics_by_class=pd.DataFrame()
+oth_filtered_global_metrics=pd.DataFrame()
 
 tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 
@@ -523,29 +525,43 @@ for threshold in thresholds:
     filtered_results.drop(columns=['tag'], inplace=True)
     filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_type']='undetermined'
     filtered_results['tag']=filtered_results.apply(lambda row: get_tag(row), axis=1)
-    part_metrics_by_class, part_global_metrics = get_balanced_accuracy(filtered_results, CLASSES)
 
-    part_metrics_by_class['threshold']=threshold
-    part_global_metrics['threshold']=threshold
+    gt_filtered_results=filtered_results[filtered_results['gt_type']=='gt'].copy()
+    gt_part_metrics_by_class, gt_part_global_metrics = get_balanced_accuracy(gt_filtered_results, CLASSES)
 
-    filtered_metrics_by_class=pd.concat([filtered_metrics_by_class, part_metrics_by_class], ignore_index=True)
-    filtered_global_metrics=pd.concat([filtered_global_metrics, part_global_metrics], ignore_index=True)
+    gt_part_metrics_by_class['threshold']=threshold
+    gt_part_global_metrics['threshold']=threshold
+
+    gt_filtered_metrics_by_class=pd.concat([gt_filtered_metrics_by_class, gt_part_metrics_by_class], ignore_index=True)
+    gt_filtered_global_metrics=pd.concat([gt_filtered_global_metrics, gt_part_global_metrics], ignore_index=True)
+
+    if  'oth' in PREDICTIONS.keys():
+        oth_filtered_results=filtered_results[filtered_results['gt_type']=='oth'].copy()
+        oth_part_metrics_by_class, oth_part_global_metrics = get_balanced_accuracy(oth_filtered_results, CLASSES)
+
+        oth_part_metrics_by_class['threshold']=threshold
+        oth_part_global_metrics['threshold']=threshold
+
+        oth_filtered_metrics_by_class=pd.concat([oth_filtered_metrics_by_class, oth_part_metrics_by_class]
+                                                , ignore_index=True)
+        oth_filtered_global_metrics=pd.concat([oth_filtered_global_metrics, oth_part_global_metrics], 
+                                              ignore_index=True)
 
     if threshold==0:
         best_filtered_threshold=0
         best_filtered_results=filtered_results
         max_f1=part_global_metrics.f1b[0]
         
-        best_by_class_filtered_metrics=part_metrics_by_class
-        best_global_filtered_metrics=part_global_metrics
+        best_by_class_filtered_metrics=gt_part_metrics_by_class
+        best_global_filtered_metrics=gt_part_global_metrics
 
     elif (part_global_metrics.f1b>max_f1)[0]:
         best_filtered_threshold=threshold
         best_filtered_results=filtered_results
         max_f1=part_global_metrics.f1b[0]
         
-        best_by_class_filtered_metrics=part_metrics_by_class
-        best_global_filtered_metrics=part_global_metrics
+        best_by_class_filtered_metrics=gt_part_metrics_by_class
+        best_global_filtered_metrics=gt_part_global_metrics
         print('\n')
         logger.info(f"The best threshold of the difference of indices for the f1-score is now {best_filtered_threshold}.")
 
@@ -585,26 +601,30 @@ bin_accuracy_param={'artificial':['art_score', 'artificial', 'artifical score'],
                     'artificial_diff': ['diff_score', 'artificial', 'score diff in artificial roads'],
                     'naturall_diff':['diff_score', 'natural', 'score diff in natural roads']}
 thresholds_bins=np.arange(0, 1.05, 0.05)
-for param in bin_accuracy_param.keys():
-    bin_values=[]
-    threshold_values=[]
-    for threshold in thresholds_bins:
-        roads_in_bin=best_comparison_df[
-                                        (best_comparison_df[bin_accuracy_param[param][0]]>threshold-0.5) &
-                                        (best_comparison_df[bin_accuracy_param[param][0]]<=threshold) &
-                                        (best_comparison_df['CATEGORY']==bin_accuracy_param[param][1])
+
+for gt_type in best_comparison_df['gt_type'].unique():
+    determined_types=best_comparison_df[best_comparison_df['gt_type']==gt_type].copy()
+
+    for param in bin_accuracy_param.keys():
+        bin_values=[]
+        threshold_values=[]
+        for threshold in thresholds_bins:
+            roads_in_bin=determined_types[
+                                        (determined_types[bin_accuracy_param[param][0]]>threshold-0.5) &
+                                        (determined_types[bin_accuracy_param[param][0]]<=threshold) &
+                                        (determined_types['CATEGORY']==bin_accuracy_param[param][1])
                                         ]
 
-        if not roads_in_bin.empty:
-            bin_values.append(
-                    roads_in_bin[
-                        roads_in_bin['cover_type']==bin_accuracy_param[param][1]
-                        ].shape[0]/roads_in_bin.shape[0])
-            threshold_values.append(threshold)
+            if not roads_in_bin.empty:
+                bin_values.append(
+                        roads_in_bin[
+                            roads_in_bin['cover_type']==bin_accuracy_param[param][1]
+                            ].shape[0]/roads_in_bin.shape[0])
+                threshold_values.append(threshold)
 
-    df=pd.DataFrame({'threshold': threshold_values, 'accuracy': bin_values})
-    df.name=bin_accuracy_param[param][2]
-    accuracy_tables.append(df)
+        df=pd.DataFrame({'threshold': threshold_values, 'accuracy': bin_values})
+        df.name=bin_accuracy_param[param][2] + ' for ' + gt_type
+        accuracy_tables.append(df)
 
 
 # Code strongly inspired from the script 'assess_predictions.py' in the object detector.
@@ -642,7 +662,7 @@ fig.update_layout(
     yaxis=dict(range=[0., 1])
 )
 
-file_to_write = os.path.join(images_folder, 'precision_vs_recall.html')
+file_to_write = os.path.join(images_folder, 'precision_vs_recall_over_validation_set.html')
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
@@ -666,7 +686,7 @@ if len(CLASSES)>1:
         yaxis=dict(range=[0., 1])
     )
 
-    file_to_write = os.path.join(images_folder, 'precision_vs_recall_dep_on_class.html')
+    file_to_write = os.path.join(images_folder, 'precision_vs_recall_dep_on_class_over_val_set.html')
     fig_k.write_html(file_to_write)
     written_files.append(file_to_write)
 
@@ -689,10 +709,10 @@ for id_cl in CLASSES:
     fig.update_layout(xaxis_title="threshold", yaxis_title="#")
     
 if len(CLASSES)>1:
-    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_dep_on_class.html')
+    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_dep_on_class_over_val_set.html')
 
 else:
-    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold.html')
+    file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_over_validation_set.html')
 
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
@@ -713,7 +733,7 @@ for y in ['Pw', 'Rw', 'f1w', 'Pb', 'Rb', 'f1b']:
 
 fig.update_layout(xaxis_title="threshold")
 
-file_to_write = os.path.join(images_folder, f'metrics_vs_threshold.html')
+file_to_write = os.path.join(images_folder, f'metrics_vs_threshold_over_validation_set.html')
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
@@ -726,16 +746,26 @@ for id_cl in CLASSES:
 
         fig.add_trace(
             go.Scatter(
-                x=filtered_metrics_by_class['threshold'][filtered_metrics_by_class['cover_class']==id_cl],
-                y=filtered_metrics_by_class[y][filtered_metrics_by_class['cover_class']==id_cl],
+                x=gt_filtered_metrics_by_class['threshold'][gt_filtered_metrics_by_class['cover_class']==id_cl],
+                y=gt_filtered_metrics_by_class[y][gt_filtered_metrics_by_class['cover_class']==id_cl],
                 mode='markers+lines',
-                name=y[0:2]+'_'+str(id_cl)
+                name=y[0:2]+'_'+str(id_cl) + '- gt'
             )
         )
 
+        if  'oth' in PREDICTIONS.keys():
+            fig.add_trace(
+                go.Scatter(
+                    x=oth_filtered_metrics_by_class['threshold'][oth_filtered_metrics_by_class['cover_class']==id_cl],
+                    y=oth_filtered_metrics_by_class[y][oth_filtered_metrics_by_class['cover_class']==id_cl],
+                    mode='markers+lines',
+                    name=y[0:2]+'_'+str(id_cl) + '- oth'
+                )
+            )
+
     fig.update_layout(xaxis_title="threshold")
     
-file_to_write = os.path.join(images_folder, f'metrics_vs_final_score_threshold_dep_on_class.html')
+file_to_write = os.path.join(images_folder, f'metrics_vs_score_diff_threshold_dep_on_class.html')
 fig.write_html(file_to_write)
 written_files.append(file_to_write)
 
