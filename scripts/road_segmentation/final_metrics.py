@@ -351,13 +351,13 @@ del considered_tiles, tiles_union, considered_zone,
 
 logger.info('Getting the intersecting area between predictions and labels...')
 
-ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
-ground_truth_2056['area_label']=ground_truth_2056.area
+visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
+visible_ground_truth_2056['area_label']=visible_ground_truth_2056.area
 
 predictions_2056=predictions.to_crs(epsg=2056)
 
-fct_misc.test_crs(ground_truth_2056.crs, predictions_2056.crs)
-predicted_roads_2056=gpd.overlay(ground_truth_2056, predictions_2056, how='intersection')
+fct_misc.test_crs(visible_ground_truth_2056.crs, predictions_2056.crs)
+predicted_roads_2056=gpd.overlay(visible_ground_truth_2056, predictions_2056, how='intersection')
 
 predicted_roads_filtered=predicted_roads_2056[(~predicted_roads_2056['BELAGSART'].isna()) &
                                             (~predicted_roads_2056['score'].isna())].copy()
@@ -365,11 +365,11 @@ predicted_roads_filtered['joined_area']=predicted_roads_filtered.area
 predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label'], 2)
 predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_in_label']*predicted_roads_filtered['score']
 
-del ground_truth, ground_truth_2056, filtered_ground_truth, predictions_2056
+del visible_ground_truth_2056, ground_truth, predictions_2056
 
 logger.info('Determining the best metrics for the predictions based on the validation dataset...')
 val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val']
-validation_ground_truth=visible_ground_truth[visible_ground_truth.geometry.intersects(validation_tiles.unary_union)]
+validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)]
 
 all_global_metrics=pd.DataFrame()
 all_metrics_by_class=pd.DataFrame()
@@ -419,10 +419,10 @@ show_metrics(best_val_by_class_metrics, best_val_global_metrics)
 
 print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
-comparison_df=determine_detected_class(predicted_roads_filtered, visible_ground_truth, best_threshold)
+comparison_df=determine_detected_class(predicted_roads_filtered, filtered_ground_truth, best_threshold)
 
 try:
-    assert(comparison_df.shape[0]==visible_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
+    assert(comparison_df.shape[0]==filtered_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
 except Exception as e:
     logger.error(e)
     sys.exit(1)
@@ -441,7 +441,7 @@ written_files.append(filepath)
 
 print('\n')
 logger.info(f"If we were to keep all the predictions, the metrics would be...")
-all_preds_comparison_df=determine_detected_class(predicted_roads_filtered, visible_ground_truth, 0)
+all_preds_comparison_df=determine_detected_class(predicted_roads_filtered, filtered_ground_truth, 0)
 
 all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
@@ -458,7 +458,7 @@ if  'oth' in PREDICTIONS.keys():
     logger.info('Metrics based on the trn, tst, val datasets...')
 
     not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
-    ground_truth_from_gt=visible_ground_truth[visible_ground_truth['gt_type']=='gt']
+    ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
     not_oth_comparison_df=determine_detected_class(not_oth_predictions, ground_truth_from_gt, best_threshold)
 
     not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
@@ -471,7 +471,7 @@ if  'oth' in PREDICTIONS.keys():
     logger.info('Metrics based on the predictions of the oth dataset...')
 
     oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
-    ground_truth_from_oth=visible_ground_truth[visible_ground_truth['gt_type']=='oth']
+    ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth']
     oth_comparison_df=determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
 
     oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
