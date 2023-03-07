@@ -120,10 +120,6 @@ python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
 python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 ```
 
-When using the images from Titiler, the url has to be changed in the parameters for the script `generate_tilesets.py`: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest.
-
-In the parameter for detectron2, the pixel means have to be adapted:
-
 ### Statistical procedure
 
 <figure align="center">

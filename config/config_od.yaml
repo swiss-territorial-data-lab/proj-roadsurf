@@ -107,10 +107,3 @@ final_metrics.py:
       oth: obj_detector/oth_predictions_at_0dot05_threshold.gpkg 
 
 
-add_tile_mask.py:
-  mask_as_band: true
-  working_folder: outputs/obj_detector
-  input_files:
-    roads: json/ground_truth_labels.geojson
-    tiles: obj_detector/split_aoi_tiles.geojson
-

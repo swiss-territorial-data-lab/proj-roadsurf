@@ -117,7 +117,7 @@ def determine_detected_class(predictions, ground_truth, threshold=0):
     return comparison_df
 
 
-def get_balanced_accuracy(comparison_df, CLASSES):
+def get_metrics(comparison_df, CLASSES):
     '''
     Get a dataframe with the GT, the predictions and the tags (TP, FP, FN)
     Calculate the per-class and global precision, recall and f1-score.
@@ -258,8 +258,8 @@ def show_metrics(metrics_by_class, global_metrics):
     '''
     Print the by-class precision and recall and the global precision, recall and f1-score
 
-    - metrics_by_class: The by-class metrics as given by the function get_balanced_accuracy()
-    - global_metrics: The global metrics as given by the function get_balanced_accuracy()
+    - metrics_by_class: The by-class metrics as given by the function get_metrics()
+    - global_metrics: The global metrics as given by the function get_metrics()
 
     return: -
     '''
@@ -384,7 +384,7 @@ for threshold in thresholds:
 
     val_comparison_df['tag']=val_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-    part_metrics_by_class, part_global_metrics = get_balanced_accuracy(val_comparison_df, CLASSES)
+    part_metrics_by_class, part_global_metrics = get_metrics(val_comparison_df, CLASSES)
 
     part_metrics_by_class['threshold']=threshold
     part_global_metrics['threshold']=threshold
@@ -395,13 +395,15 @@ for threshold in thresholds:
     if threshold==0:
         best_threshold=0
         max_f1=part_global_metrics.f1b[0]
+        max_P=part_global_metrics.Pb[0]
 
         best_val_by_class_metrics=part_metrics_by_class
         best_val_global_metrics=part_global_metrics
 
-    elif (part_global_metrics.f1b>max_f1)[0]:
-        best_threshold=threshold
+    elif (part_global_metrics.f1b>max_f1)[0] or ((part_global_metrics.f1b==max_f1)[0] and (part_global_metrics.Pb>max_P)[0]):
+        best_threshold=round(threshold,2)
         max_f1=part_global_metrics.f1b[0]
+        max_P=part_global_metrics.Pb[0]
         
         best_val_by_class_metrics=part_metrics_by_class
         best_val_global_metrics=part_global_metrics
@@ -429,7 +431,7 @@ except Exception as e:
 
 comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-best_metrics_by_class, best_global_metrics = get_balanced_accuracy(comparison_df, CLASSES)
+best_metrics_by_class, best_global_metrics = get_metrics(comparison_df, CLASSES)
 
 best_comparison_df=comparison_df.copy()
 
@@ -445,7 +447,7 @@ all_preds_comparison_df=determine_detected_class(predicted_roads_filtered, filte
 
 all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-all_preds_metrics_by_class, all_preds_global_metrics = get_balanced_accuracy(all_preds_comparison_df, CLASSES)
+all_preds_metrics_by_class, all_preds_global_metrics = get_metrics(all_preds_comparison_df, CLASSES)
 
 show_metrics(all_preds_metrics_by_class, all_preds_global_metrics)
 
@@ -463,7 +465,7 @@ if 'oth' in PREDICTIONS.keys():
 
     not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-    not_oth_metrics_by_class, not_oth_global_metrics = get_balanced_accuracy(not_oth_comparison_df, CLASSES)
+    not_oth_metrics_by_class, not_oth_global_metrics = get_metrics(not_oth_comparison_df, CLASSES)
 
     show_metrics(not_oth_metrics_by_class, not_oth_global_metrics)
 
@@ -476,7 +478,7 @@ if 'oth' in PREDICTIONS.keys():
 
     oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-    oth_metrics_by_class, oth_global_metrics = get_balanced_accuracy(oth_comparison_df,  CLASSES)
+    oth_metrics_by_class, oth_global_metrics = get_metrics(oth_comparison_df,  CLASSES)
 
     show_metrics(oth_metrics_by_class, oth_global_metrics)
 
@@ -527,7 +529,7 @@ for threshold in thresholds:
     filtered_results['tag']=filtered_results.apply(lambda row: get_tag(row), axis=1)
 
     gt_filtered_results=filtered_results[filtered_results['gt_type']=='gt'].copy()
-    gt_part_metrics_by_class, gt_part_global_metrics = get_balanced_accuracy(gt_filtered_results, CLASSES)
+    gt_part_metrics_by_class, gt_part_global_metrics = get_metrics(gt_filtered_results, CLASSES)
 
     gt_part_metrics_by_class['threshold']=threshold
     gt_part_global_metrics['threshold']=threshold
@@ -537,7 +539,7 @@ for threshold in thresholds:
 
     if  'oth' in PREDICTIONS.keys():
         oth_filtered_results=filtered_results[filtered_results['gt_type']=='oth'].copy()
-        oth_part_metrics_by_class, oth_part_global_metrics = get_balanced_accuracy(oth_filtered_results, CLASSES)
+        oth_part_metrics_by_class, oth_part_global_metrics = get_metrics(oth_filtered_results, CLASSES)
 
         oth_part_metrics_by_class['threshold']=threshold
         oth_part_global_metrics['threshold']=threshold
@@ -550,15 +552,15 @@ for threshold in thresholds:
     if threshold==0:
         best_filtered_threshold=0
         best_filtered_results=filtered_results
-        max_f1=part_global_metrics.f1b[0]
+        max_f1=gt_part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=gt_part_metrics_by_class
         best_global_filtered_metrics=gt_part_global_metrics
 
-    elif (part_global_metrics.f1b>max_f1)[0]:
-        best_filtered_threshold=threshold
+    elif (gt_part_global_metrics.f1b>max_f1)[0]:
+        best_filtered_threshold=round(threshold,2)
         best_filtered_results=filtered_results
-        max_f1=part_global_metrics.f1b[0]
+        max_f1=gt_part_global_metrics.f1b[0]
         
         best_by_class_filtered_metrics=gt_part_metrics_by_class
         best_global_filtered_metrics=gt_part_global_metrics
@@ -569,12 +571,16 @@ for threshold in thresholds:
 
 tqdm_log.close()
 
-print('\n')
-logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
-show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
-
 if best_filtered_threshold>0:
-    print(f'It would be wise to verify all the results with a score difference lower than {best_filtered_threshold}.')
+    print('\n')
+    logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
+    show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
+
+    logger.info('%s %s', f'It would be wise to verify all the results with a difference on the indeces',
+                f'lower than {best_filtered_threshold}.')
+else:
+    logger.info('No threshold on the difference of indexes would improve the results.')
+
 
 filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
 best_filtered_results.to_file(filepath)
@@ -589,7 +595,7 @@ if True:
     comp_df_all_art.drop(columns=['tag'], inplace=True)
     comp_df_all_art['tag']=comp_df_all_art.apply(lambda row: get_tag(row), axis=1)
 
-    class_metrics_all_art, global_metrics_all_art=get_balanced_accuracy(comp_df_all_art, CLASSES)
+    class_metrics_all_art, global_metrics_all_art=get_metrics(comp_df_all_art, CLASSES)
     show_metrics(class_metrics_all_art, global_metrics_all_art)
     print('\n')
 
