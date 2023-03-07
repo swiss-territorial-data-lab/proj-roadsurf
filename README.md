@@ -29,7 +29,7 @@ Initial data:
     - forests as polygons,
 - [SWISSIMAGE](https://www.swisstopo.admin.ch/en/geodata/images/ortho.html):
     - SWISSIMAGE 10 cm,
-- Area of interest:
+- Area of interest (AOI):
     - 4 tiles of the 1:25'000 national map situated in the region of the Emmental,
 - quarries as polygons.
 
@@ -50,9 +50,9 @@ The procedure based on road segmentation is presented in priority here. The stat
 Table of the f1-scores for each class and for the global results: 
 |           	| Training, validation and test area 	| Other area 	|
 |:---          	|:---:                                  |:---: 	        |
-| Artificial 	|               0.955     	            |     0.944    	|
-| Natural    	|               0.475     	            |     0.155    	|
-| Global  	    |               0.737     	            |     0.557    	|
+| Artificial 	|               0.959     	            |     0.916    	|
+| Natural    	|               0.616     	            |     0.134    	|
+| Global  	    |               0.790     	            |     0.547    	|
 
 
 When using a f1-score giving the same importance to the two classes (artificial and natural), the final f1-score is 0.737 over the training, validation and test area and 0.557 over the other area. <br>
@@ -112,8 +112,8 @@ python scripts/road_segmentation/final_metrics.py
 ## Other uses
 
 ### Preprocessing
-To reproduce exaclty the procedure described in the technical documentation, you will have to use the product SWISSIMAGE RS instead of SWISSIMAGE 10 cm. We obtained it on a hard disk and transfered it to our S3 cloud with the script `RS_images_to_S3.py`.
-Then, with the help of the script `tif2cog.py`, the images were tranformed from 16-bits TIFF to 8-bits Cloud Optimized GeoTiff files and Titiler was used to access them like tiles in a WMTS service.
+To reproduce exactly the procedure described in the technical documentation, you will have to use the product SWISSIMAGE RS instead of SWISSIMAGE 10 cm. We obtained it on a hard disk and transferred it to our S3 cloud with the script `RS_images_to_S3.py`.
+Then, with the help of the script `tif2cog.py`, the images were transformed from 16-bits TIFF to 8-bits Cloud Optimized GeoTiff files and Titiler was used to access them like tiles in a WMTS service.
 
 ```
 python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
@@ -123,13 +123,6 @@ python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 When using the images from Titiler, the url has to be changed in the parameters for the script `generate_tilesets.py`: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest.
 
 In the parameter for detectron2, the pixel means have to be adapted:
-```
-MODEL:
-    PIXEL_MEAN: # BGR order 
-    - 103.53
-    - 116.28
-    - 123.675
-```
 
 ### Statistical procedure
 
@@ -137,7 +130,7 @@ MODEL:
 <image src="img/statistical_flow.jpeg" alt="flow for the research of a statistical differences">
 </figure>
 
-Supervised classification was tested before road segementation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
+Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
 
 ```
 python scripts/statistical_analysis/prepare_data.py config/config_stats.yaml

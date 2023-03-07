@@ -17,7 +17,7 @@ prepare_data_od.py:
     roads_for_labels: roads_for_OD.shp
   output_folder: outputs
   # ok_tiles: <relative path from the output folder>
-  zoom_level: 20  # keep between 17 and 20  
+  zoom_level: 18  # keep between 17 and 20  
 
 generate_tilesets.py:
   debug_mode: false
@@ -27,7 +27,7 @@ generate_tilesets.py:
     other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
-      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&no_data=0&return_mask=false&pixel_selection=lowest
+      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2018/3857/{z}/{x}/{y}.jpeg
       srs: "EPSG:3857"
   output_folder: outputs/obj_detector
   tile_size: 256 # per side, in pixels
@@ -71,9 +71,9 @@ make_predictions.py:
       oth: COCO_oth.json
   detectron2_config_file: ../../config/detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: 'logs/model_final.pth'
+      pth_file: 'logs/model_0007999.pth'
   rdp_simplification: # rdp = Ramer-Douglas-Peucker
-    enabled: false
+    enabled: true
     epsilon: 0.75 # cf. https://rdp.readthedocs.io/en/latest/
   score_lower_threshold: 0.05
   
