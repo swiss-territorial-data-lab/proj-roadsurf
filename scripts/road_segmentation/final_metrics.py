@@ -578,13 +578,14 @@ if best_filtered_threshold>0:
 
     logger.info('%s %s', f'It would be wise to verify all the results with a difference on the indeces',
                 f'lower than {best_filtered_threshold}.')
+    
+    filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
+    best_filtered_results.to_file(filepath)
+    written_files.append(filepath)
+
 else:
     logger.info('No threshold on the difference of indexes would improve the results.')
 
-
-filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
-best_filtered_results.to_file(filepath)
-written_files.append(filepath)
 
 print('\n')
 

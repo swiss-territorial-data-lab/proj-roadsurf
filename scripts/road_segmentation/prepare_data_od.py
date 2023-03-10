@@ -289,30 +289,33 @@ if GENERATE_LABELS:
         tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi.to_crs(epsg=4326)
 
     if OK_TILES:
+        logger.info('Only the tiles juged as ok based on zoom level 18 will be used.')
+        tiles_table=gpd.read_file(OK_TILES)
+
+        tiles_table.replace('-','0.5', inplace=True)
+        verified_tiles=tiles_table[~tiles_table['OK'].isna()].copy()
+        verified_tiles=verified_tiles.astype({'OK': 'float'})
+
+        ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
+        
         if ZOOM_LEVEL==18:
-            logger.info('Only the tiles juged as ok will be used')
-            tiles_table=gpd.read_file(OK_TILES)
-            tiles_table.replace('-','0.5', inplace=True)
-            verified_tiles=tiles_table[~tiles_table['OK'].isna()].copy()
-            verified_tiles=verified_tiles.astype({'OK': 'float'})
-
-            ok_tiles=verified_tiles[verified_tiles['OK']>=0.5].copy()
-
             tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.merge(ok_tiles[['title','OK']], how='inner', on='title')
 
-            logger.warning('%s %s',
-                    'When using only the ok tiles, it is advised to include the oth dataset',
-                    'in the generation of the tilesets to ensure the correct selection of the tiles.')
-
         else:
-            ok_tiles_z18=gpd.read_file(os.path.join(path_json, 'ok_tiles_aoi_z18_221212.geojson'))
             if ZOOM_LEVEL>18:
-                tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.sjoin(ok_tiles_z18[['OK', 'geometry']],
+                logger.info('%s %s',
+                            'The used zoom level is higher than 18.',
+                            'Only the tiles within an ok tile from zoom level 18 will be used.')
+                tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.sjoin(ok_tiles[['OK', 'geometry']],
                                                                                 how='inner', predicate='within')
                 tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
                 
             else:
-                logger.info('Ok tiles for this zoom not developped yet :(')
+                logger.warning('Ok tiles for zoom levels lower than 18 are not developped yet :( No tile selection.')
+                
+        logger.warning('%s %s',
+                    'When using only the ok tiles, it is advised to include the oth dataset',
+                    'in the generation of the tilesets to ensure the correct selection of the tiles.')
 
     if RESTRICTED_AOI_TRAIN:
         logger.info('A subset of the AOI is used for the traning.')
