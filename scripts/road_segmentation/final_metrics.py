@@ -8,10 +8,9 @@ import geopandas as gpd
 import numpy as np
 import plotly.graph_objects as go
 
-from shapely.affinity import scale
-
 from tqdm import tqdm
 
+import determine_class
 sys.path.insert(1, 'scripts')
 import functions.fct_misc as fct_misc
 
@@ -32,90 +31,26 @@ INITIAL_FOLDER=cfg['initial_folder']
 PROCESSED_FOLDER=cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
 
-ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['input']['road_param'])
+ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param'])
 
-GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['input']['ground_truth'])
-if 'other_labels' in cfg['input'].keys():
-    OTHER_LABELS=os.path.join(PROCESSED_FOLDER, cfg['input']['other_labels'])
+GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['inputs']['ground_truth'])
+if 'other_labels' in cfg['inputs'].keys():
+    OTHER_LABELS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['other_labels'])
 else:
     OTHER_LABELS=None
 
-PREDICTIONS=cfg['input']['to_evaluate']
-TILES=os.path.join(PROCESSED_FOLDER, cfg['input']['tiles'])
-LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['input']['labels_id'])
+PREDICTIONS=cfg['inputs']['to_evaluate']
+TILES=os.path.join(PROCESSED_FOLDER, cfg['inputs']['tiles'])
+LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['inputs']['labels_id'])
+
+QUARRIES=os.path.join(INITIAL_FOLDER, cfg['inputs']['quarries'])
+
 
 shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 
 written_files=[]
 
 # Definition of functions ---------------------------
-
-def determine_detected_class(predictions, ground_truth, threshold=0):
-    '''
-    Determine the detected class for the road surface by combining the multiple detections.
-
-    - predictions: dataframe of the predicted road surface
-    - ground_truth: dataframe of the ground truth
-    - threshold: threshold for the confidence score
-    return: a dataframe with the actual and predicted surface type and the combined artificial and natural confidence score,
-        as well as their difference.
-    '''
-
-    final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
-    valid_predictions=predictions[predictions['score']>=threshold]
-    detected_roads_id=valid_predictions['OBJECTID'].unique().tolist()
-
-    for road_id in ground_truth['OBJECTID'].unique().tolist():
-
-        if road_id not in detected_roads_id:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('undetected')
-            final_type['nat_score'].append(0)
-            final_type['art_score'].append(0)
-            final_type['diff_score'].append(0)
-            continue
-
-        intersecting_predictions=valid_predictions[valid_predictions['OBJECTID']==road_id].copy()
-
-        groups=intersecting_predictions.groupby(['pred_class_name']).sum(numeric_only=True)
-        if 'natural' in groups.index:
-            if groups.loc['natural', 'weighted_score']==0:
-                natural_index=0
-            else:
-                natural_index=groups.loc['natural', 'weighted_score']/groups.loc['natural', 'area_pred_in_label']
-        else:
-            natural_index=0
-        if 'artificial' in groups.index:
-            if groups.loc['artificial', 'weighted_score']==0:
-                artificial_index=0
-            else:
-                artificial_index=groups.loc['artificial', 'weighted_score']/groups.loc['artificial', 'area_pred_in_label']
-        else:
-            artificial_index=0
-
-        if artificial_index==natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('undetermined')
-            final_type['diff_score'].append(0)
-        elif artificial_index > natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('artificial')
-            final_type['diff_score'].append(abs(artificial_index-natural_index))
-        elif artificial_index < natural_index:
-            final_type['road_id'].append(road_id)
-            final_type['cover_type'].append('natural')
-            final_type['diff_score'].append(abs(artificial_index-natural_index))
-
-        final_type['art_score'].append(round(artificial_index,3))
-        final_type['nat_score'].append(round(natural_index, 3))
-
-    final_type_df=pd.DataFrame(final_type)
-
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID','geometry', 'CATEGORY', 'gt_type']],
-                                    how='inner', left_on='road_id', right_on='OBJECTID'))
-
-    return comparison_df
-
 
 def get_metrics(comparison_df, CLASSES):
     '''
@@ -181,63 +116,6 @@ def get_metrics(comparison_df, CLASSES):
 
     return metrics_df, global_metrics_df
 
-def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
-    '''
-    Clip the labels to the tiles
-    Copied from the misc functions of the object detector 
-    cf. https://github.com/swiss-territorial-data-lab/object-detector/blob/master/helpers/misc.py
-
-    - labels_gdf: geodataframe with the labels
-    - tiles_gdf: geodataframe of the tiles
-    - fact: factor to scale the tiles before clipping
-    return: a geodataframe with the labels clipped to the tiles
-    '''
-
-    tiles_gdf['tile_geometry'] = tiles_gdf['geometry']
-        
-    assert(labels_gdf.crs == tiles_gdf.crs)
-    
-    labels_tiles_sjoined_gdf = gpd.sjoin(labels_gdf, tiles_gdf, how='inner', predicate='intersects')
-    
-    def clip_row(row, fact=fact):
-        
-        old_geo = row.geometry
-        scaled_tile_geo = scale(row.tile_geometry, xfact=fact, yfact=fact)
-        new_geo = old_geo.intersection(scaled_tile_geo)
-        row['geometry'] = new_geo
-
-        return row
-
-    clipped_labels_gdf = labels_tiles_sjoined_gdf.apply(lambda row: clip_row(row, fact), axis=1)
-    clipped_labels_gdf.crs = labels_gdf.crs
-
-    clipped_labels_gdf.drop(columns=['tile_geometry', 'index_right'], inplace=True)
-    clipped_labels_gdf.rename(columns={'id': 'tile_id'}, inplace=True)
-
-    return clipped_labels_gdf
-
-def get_corresponding_class(row, labels_id):
-    'Get the class in words from the class ids out of the object detector with the method apply.'
-
-    if row['pred_class']==0:
-        return labels_id.loc[labels_id['id']==0, 'name'].item()
-    elif row['pred_class']==1:
-        return labels_id.loc[labels_id['id']==1, 'name'].item()
-    else:
-        logger.error(f"Unexpected class: {row['pred_class']}")
-        sys.exit(1)
-
-def determine_category(row):
-    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
-
-    if row['BELAGSART']==100:
-        return 'artificial'
-    if row['BELAGSART']==200:
-        return 'natural'
-    else:
-        logger.error(f"Unexpected class: {row['BELAGSART']}")
-        sys.exit(1)
-
 def get_tag(row):
         'Compare the class in the prediction and the GT and tag the row as TP, FP or FN with the method apply.'
 
@@ -294,14 +172,15 @@ for dataset_acronym in PREDICTIONS.keys():
     dataset=gpd.read_file(os.path.join(PROCESSED_FOLDER, PREDICTIONS[dataset_acronym]))
     dataset['dataset']=dataset_acronym
     predictions=pd.concat([predictions, dataset], ignore_index=True)
-predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row, labels_id), axis=1)
+predictions['pred_class_name']=predictions.apply(lambda row: determine_class.get_corresponding_class(row, labels_id),
+                                                    axis=1)
 predictions.drop(columns=['pred_class'], inplace=True)
 
 tiles=gpd.read_file(TILES)
 considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())]
 validation_tiles=tiles[tiles['dataset']=='val']
 
-quarries=gpd.read_file(os.path.join(INITIAL_FOLDER, 'quarries/quarries.shp'))
+quarries=gpd.read_file(QUARRIES)
 
 del dataset, tiles
 
@@ -318,52 +197,28 @@ filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','W
                                         how='inner',left_on='OBJEKTART',right_on='GDB-Code')
 filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997]
 
-filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
+filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_class.determine_category(row), axis=1)
 
 # Roads in quarries are always naturals
 logger.info('-- Roads in quarries are always naturals...')
 
-buffered_quarries=quarries.copy()
-buffered_quarries['geometry']=buffered_quarries.buffer(5)
-buffered_quarries_4326=buffered_quarries.to_crs(epsg=4326)
-
-fct_misc.test_crs(filtered_ground_truth.crs, buffered_quarries_4326.crs)
-
-roads_in_quarries=gpd.sjoin(filtered_ground_truth, buffered_quarries_4326, predicate='within')
+roads_in_quarries, filtered_ground_truth = determine_class.get_roads_in_quarries(quarries, filtered_ground_truth)
 filepath=os.path.join(shp_gpkg_folder, 'roads_in_quarries.shp')
 roads_in_quarries.to_file(filepath)
 written_files.append(os.path.join(filepath))
 
-filtered_ground_truth=filtered_ground_truth[~filtered_ground_truth['OBJECTID'].isin(
-                                    roads_in_quarries['OBJECTID'].unique().tolist())] 
-
 logger.info('Limiting the labels to the visible area of labels and predictions...')
 
-tiles_union=considered_tiles['geometry'].unary_union
-considered_zone=gpd.GeoDataFrame({'id_tiles_union': [i for i in range(len(tiles_union.geoms))],
-                                'geometry': [geo for geo in tiles_union.geoms]},
-                                crs=4326
-                                )
+visible_ground_truth=determine_class.clip_labels(filtered_ground_truth, considered_tiles[['title', 'id', 'geometry']])
 
-visible_ground_truth=clip_labels(filtered_ground_truth, considered_tiles[['title', 'id', 'geometry']])
-
-del considered_tiles, tiles_union, considered_zone, 
+del considered_tiles
 
 logger.info('Getting the intersecting area between predictions and labels...')
 
 visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
-visible_ground_truth_2056['area_label']=visible_ground_truth_2056.area
-
 predictions_2056=predictions.to_crs(epsg=2056)
 
-fct_misc.test_crs(visible_ground_truth_2056.crs, predictions_2056.crs)
-predicted_roads_2056=gpd.overlay(visible_ground_truth_2056, predictions_2056, how='intersection')
-
-predicted_roads_filtered=predicted_roads_2056[(~predicted_roads_2056['BELAGSART'].isna()) &
-                                            (~predicted_roads_2056['score'].isna())].copy()
-predicted_roads_filtered['joined_area']=predicted_roads_filtered.area
-predicted_roads_filtered['area_pred_in_label']=round(predicted_roads_filtered['joined_area']/predicted_roads_filtered['area_label'], 2)
-predicted_roads_filtered['weighted_score']=predicted_roads_filtered['area_pred_in_label']*predicted_roads_filtered['score']
+predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
 
 del visible_ground_truth_2056, ground_truth, predictions_2056
 
@@ -380,7 +235,7 @@ tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 for threshold in thresholds:
     tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-    val_comparison_df=determine_detected_class(val_predictions, validation_ground_truth, threshold)
+    val_comparison_df=determine_class.determine_detected_class(val_predictions, validation_ground_truth, threshold)
 
     val_comparison_df['tag']=val_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
@@ -421,7 +276,7 @@ show_metrics(best_val_by_class_metrics, best_val_global_metrics)
 
 print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
-comparison_df=determine_detected_class(predicted_roads_filtered, filtered_ground_truth, best_threshold)
+comparison_df=determine_class.determine_detected_class(predicted_roads_filtered, filtered_ground_truth, best_threshold)
 
 try:
     assert(comparison_df.shape[0]==filtered_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
@@ -443,7 +298,7 @@ written_files.append(filepath)
 
 print('\n')
 logger.info(f"If we were to keep all the predictions, the metrics would be...")
-all_preds_comparison_df=determine_detected_class(predicted_roads_filtered, filtered_ground_truth, 0)
+all_preds_comparison_df=determine_class.determine_detected_class(predicted_roads_filtered, filtered_ground_truth, 0)
 
 all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
@@ -461,7 +316,8 @@ if 'oth' in PREDICTIONS.keys():
 
     not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
     ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
-    not_oth_comparison_df=determine_detected_class(not_oth_predictions, ground_truth_from_gt, best_threshold)
+    not_oth_comparison_df=determine_class.determine_detected_class(
+            not_oth_predictions, ground_truth_from_gt, best_threshold)
 
     not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
@@ -474,7 +330,7 @@ if 'oth' in PREDICTIONS.keys():
 
     oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
     ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth']
-    oth_comparison_df=determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
+    oth_comparison_df=determine_class.determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
 
     oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
@@ -570,9 +426,9 @@ for threshold in thresholds:
     tqdm_log.update(1)
 
 tqdm_log.close()
+print('\n')
 
 if best_filtered_threshold>0:
-    print('\n')
     logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
     show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
@@ -584,7 +440,7 @@ if best_filtered_threshold>0:
     written_files.append(filepath)
 
 else:
-    logger.info('No threshold on the difference of indexes would improve the results.')
+    logger.info('No threshold on the difference of indices would improve the results.')
 
 
 print('\n')
