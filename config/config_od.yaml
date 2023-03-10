@@ -1,0 +1,123 @@
+# Procedure for automatic road detection with the object detector
+
+prepare_data_od.py:
+  tasks:
+    determine_roads_surfaces: true
+    generate_tiles_info: true
+    generate_labels: true
+  input:
+    input_folder: data
+    input_files:
+      roads: swissTLM3D/roads_lines.shp
+      roads_param: roads_parameters.xlsx
+      forests: swissTLM3D/forests.shp
+      aoi: AOI/aoi.shp
+      restricted_aoi_training: AOI/2_tiles_AOI.shp
+  processed_input:
+    roads_for_labels: roads_for_OD.shp
+  output_folder: outputs
+  # ok_tiles: <relative path from the output folder>
+  zoom_level: 18  # keep between 17 and 20  
+
+generate_tilesets.py:
+  debug_mode: false
+  datasets:
+    aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
+    ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
+    other_labels_geojson: outputs/json_inputs/other_labels.geojson
+    orthophotos_web_service:
+      type: XYZ
+      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2018/3857/{z}/{x}/{y}.jpeg
+      srs: "EPSG:3857"
+  output_folder: outputs/obj_detector
+  tile_size: 256 # per side, in pixels
+  overwrite: False
+  n_jobs: 10
+  COCO_metadata:
+    year: 2022
+    version: 2.0
+    description: 2018 SWISSIMAGE RS with segmentation of Feature Class TLM_STRASSE
+    contributor: swisstopo
+    url: https://swisstopo.ch
+    license:
+      name: unknown
+      url: https://www.swisstopo.admin.ch/fr/home/meta/conditions-generales/geodonnees/ogd.html
+
+calculate_statistics.py:
+  working_folder: outputs/obj_detector
+  tiles: split_aoi_tiles.geojson
+
+train_model.py:
+  working_folder: outputs/obj_detector
+  log_subfolder: logs
+  sample_tagged_img_subfolder: sample_training_images
+  COCO_files: # relative paths, w/ respect to the working_folder
+      trn: COCO_trn.json
+      val: COCO_val.json
+      tst: COCO_tst.json
+  detectron2_config_file: ../../config/detectron2_config_3bands.yaml # path relative to the working_folder
+  model_weights:
+      model_zoo_checkpoint_url: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml"
+      
+make_predictions.py:
+  working_folder: outputs/obj_detector
+  log_subfolder: logs
+  sample_tagged_img_subfolder: sample_prediction_images
+  image_metadata_json: img_metadata.json
+  COCO_files: # relative paths, w/ respect to the working_folder
+      trn: COCO_trn.json
+      val: COCO_val.json
+      tst: COCO_tst.json
+      oth: COCO_oth.json
+  detectron2_config_file: ../../config/detectron2_config_3bands.yaml # path relative to the working_folder
+  model_weights:
+      pth_file: 'logs/model_0007999.pth'
+  rdp_simplification: # rdp = Ramer-Douglas-Peucker
+    enabled: true
+    epsilon: 0.75 # cf. https://rdp.readthedocs.io/en/latest/
+  score_lower_threshold: 0.05
+  
+assess_predictions.py:
+  datasets:
+    ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
+    image_metadata_json: outputs/obj_detector/img_metadata.json
+    split_aoi_tiles_geojson: outputs/obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
+    predictions:
+      trn: outputs/obj_detector/trn_predictions_at_0dot05_threshold.gpkg
+      val: outputs/obj_detector/val_predictions_at_0dot05_threshold.gpkg
+      tst: outputs/obj_detector/tst_predictions_at_0dot05_threshold.gpkg
+      oth: outputs/obj_detector/oth_predictions_at_0dot05_threshold.gpkg
+  output_folder: outputs/obj_detector
+
+
+final_metrics.py:
+  initial_folder: data
+  processed_folder: outputs
+  final_folder: outputs/final
+  inputs:
+    road_param: roads_parameters.xlsx
+    ground_truth: json_inputs/ground_truth_labels.geojson
+    other_labels: json_inputs/other_labels.geojson
+    tiles: obj_detector/split_aoi_tiles.geojson
+    labels_id: obj_detector/labels_id.json
+    to_evaluate:
+      trn: obj_detector/trn_predictions_at_0dot05_threshold.gpkg
+      val: obj_detector/val_predictions_at_0dot05_threshold.gpkg
+      tst: obj_detector/tst_predictions_at_0dot05_threshold.gpkg
+      oth: obj_detector/oth_predictions_at_0dot05_threshold.gpkg 
+    quarries: quarries/quarries.shp
+
+
+determine_class.py:
+  initial_folder: data
+  processed_folder: outputs
+  final_folder: outputs/final
+  threshold: 0.2
+  inputs:
+    road_param: roads_parameters.xlsx
+    roads: json_inputs/other_labels.geojson
+    tiles: obj_detector/split_aoi_tiles.geojson
+    labels_id: obj_detector/labels_id.json
+    predictions: obj_detector/oth_predictions_at_0dot05_threshold.gpkg
+    pred_layer: 
+    quarries: quarries/quarries.shp

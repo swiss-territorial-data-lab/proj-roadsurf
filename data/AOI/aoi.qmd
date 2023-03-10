@@ -1,0 +1,67 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.26.3-Buenos Aires">
+  <identifier>PRODAS_MANAGER.SPATIALSELTYPE_GRAT25_LV95</identifier>
+  <parentidentifier></parentidentifier>
+  <language>FRA</language>
+  <type>dataset</type>
+  <title>Spatial Selection Type LV95 - Graticules LK25</title>
+  <abstract>Die SpatialSelectionTypes sind die gültigen Grundlagelayer für räumliche Selektionen innerhalb der Schweiz. Um eine einheitliche Qualität zu garantieren sollten für sämtliche Produkte der swisstopo (exkl. AV) diese Selektionslayer verwendet werden, wie dies auch im Toposhop beim ProdasExportManager der Fall ist.
+Die Daten sind stets aktuell und werden von SwissBoundaries3D abgeleitet. Zur Verfügung stehen Landes-, Kantons und Gemeindegrenzen sowie verschiedene Blattschnitte.
+Les couches Spatial Selection Types sont les couches de bases utilisées pour les sélections spatiales dans le périmètre de la Suisse. Pour garantir une qualité uniforme, ces couches devraient être utilisées comme couche de sélection pour tous les produits de swisstopo (hormis celles de la MO) et ainsi garantir des sélections identiques à celles du Toposhop via ProdasExportManager.
+Les données sont toujours actuelles et sont issues de SwissBoundaries3D. Les données présentes sont celles des limites nationales, cantonales et communales, ainsi que divers découpages de feuilles de la cartographie.
+
+Spatial Selection Type LV95 - Graticules LK25 Spatial Selection Type MN95 - Graticules CN25
+
+REQUIRED: A brief narrative summary of the data set.
+
+REQUIRED: A summary of the intentions with which the data set was developed.</abstract>
+  <keywords vocabulary="gmd:topicCategory">
+    <keyword>REQUIRED: Common-use word or phrase used to describe the subject of the data set.</keyword>
+  </keywords>
+  <contact>
+    <name></name>
+    <organization></organization>
+    <position></position>
+    <voice></voice>
+    <fax></fax>
+    <email></email>
+    <role></role>
+  </contact>
+  <links>
+    <link url="Server=ltappl63; Service=5159; User=prodas_manager; Version=SDE.DEFAULT" type="ArcSDE Connection" name="SDE Feature Class" description="" format="" mimeType="" size=""/>
+  </links>
+  <fees></fees>
+  <constraints type="Limitations of use">Interne Benutzung der Geodaten:
+Die Weitergabe von Daten oder Teilen davon an Dritte (Ingenieur- oder Softwarebüros, Verwaltungsstellen des Bundes, der Kantone und Gemeinden, Hochschulinstitute, Private, usw.) ist untersagt.Müssen die Daten im Rahmen eines Projektes von swisstopo an Dritte weitergegeben werden, wird die Abgabe der Daten durch den Teilprozess Geodatenabgabe geregelt.
+Utilisation interne des géodonnées:
+La remise des données ou d’une partie de celles-ci à des tiers (bureaux d'ingénieurs ou de logiciels, administrations fédérales, cantonales et communales, instituts universitaires, particuliers, etc.) est interdite.Si des données doivent être transmises à des tiers dans le cadre d’un projet de swisstopo, la remise des données doit être réglée par le processus partiel Distribution des géodonnées.</constraints>
+  <constraints type="Access">REQUIRED: Restrictions and legal prerequisites for accessing the data set.</constraints>
+  <rights>Bundesamt für Landestopografie&#xd;
+Office fédéral de topographie&#xd;
+Kontaktperson / Personne de contact:&#xd;
+Geodata</rights>
+  <rights>REQUIRED: Restrictions and legal prerequisites for using the data set after access is granted.</rights>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys nativeFormat="Wkt">
+      <wkt>PROJCRS["CH1903+ / LV95",BASEGEOGCRS["CH1903+",DATUM["CH1903+",ELLIPSOID["Bessel 1841",6377397.155,299.1528128,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4150]],CONVERSION["Swiss Oblique Mercator 1995",METHOD["Hotine Oblique Mercator (variant B)",ID["EPSG",9815]],PARAMETER["Latitude of projection centre",46.9524055555556,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8811]],PARAMETER["Longitude of projection centre",7.43958333333333,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8812]],PARAMETER["Azimuth of initial line",90,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8813]],PARAMETER["Angle from Rectified to Skew Grid",90,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8814]],PARAMETER["Scale factor on initial line",1,SCALEUNIT["unity",1],ID["EPSG",8815]],PARAMETER["Easting at projection centre",2600000,LENGTHUNIT["metre",1],ID["EPSG",8816]],PARAMETER["Northing at projection centre",1200000,LENGTHUNIT["metre",1],ID["EPSG",8817]]],CS[Cartesian,2],AXIS["(E)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["(N)",north,ORDER[2],LENGTHUNIT["metre",1]],USAGE[SCOPE["unknown"],AREA["Europe - Liechtenstein and Switzerland"],BBOX[45.82,5.96,47.81,10.49]],ID["EPSG",2056]]</wkt>
+      <proj4>+proj=somerc +lat_0=46.9524055555556 +lon_0=7.43958333333333 +k_0=1 +x_0=2600000 +y_0=1200000 +ellps=bessel +towgs84=674.374,15.056,405.346,0,0,0,0 +units=m +no_defs</proj4>
+      <srsid>47</srsid>
+      <srid>2056</srid>
+      <authid>EPSG:2056</authid>
+      <description>CH1903+ / LV95</description>
+      <projectionacronym>somerc</projectionacronym>
+      <ellipsoidacronym>EPSG:7004</ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial minz="0" crs="EPSG:2056" maxy="48.30160000000000053" maxx="11.4789999999999992" maxz="0" minx="5.3512000000000004" dimensions="2" miny="45.64459999999999695"/>
+    <temporal>
+      <period>
+        <start></start>
+        <end></end>
+      </period>
+    </temporal>
+  </extent>
+</qgis>
