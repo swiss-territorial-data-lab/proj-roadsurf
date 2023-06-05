@@ -29,7 +29,6 @@ prepare_data_od.py:
   output_folder: outputs
   zoom_level: 18  # keep between 17 and 20  
 
-
 generate_tilesets.py:
   debug_mode: false
   datasets:
@@ -56,7 +55,7 @@ statistical_analysis.py:
   final_folder: outputs/final
   param:
     pixel_threshold: 10
-    max_confidence: 12.5
+    max_margin_of_interest: 12.5
     make_boxplots: true
     do_ks_test: false
     make_pca: true

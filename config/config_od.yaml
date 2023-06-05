@@ -20,7 +20,7 @@ prepare_data_od.py:
   zoom_level: 18  # keep between 17 and 20  
 
 generate_tilesets.py:
-  debug_mode: false
+  debug_mode: true
   datasets:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson

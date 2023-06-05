@@ -20,7 +20,7 @@
 ## Description
 
 ### Goal
-The goal of this project is to classify the roads of Switzerland based on the type of their surface, artificial or natural. This work is currently done by operators at the Swiss Federal Office of Topography (swisstopo) and this is a time-consuming and repetitive task, therefore adapted to the automatization thank to data science. <br>
+The goal of this project is to classify the roads of Switzerland based on their surface type, artificial or natural. This work is currently done by operators at the Swiss Federal Office of Topography (swisstopo) and this is a time-consuming and repetitive task, therefore adapted to the automatization thank to data science. <br>
 
 ### Data
 Initial data:
@@ -43,7 +43,7 @@ Here, the images used are the ones from the product SWISSIMAGE 10 cm made availa
 <figcaption align="center">Simplified diagram of the methodology for this project.</figcaption> 
 </figure>
 
-We first searched for statistical differences between the classes in order to perform a supervised classification. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2). <br>
+We first searched for statistical differences between the classes in order to perform a supervised classification based on machine-learning methods. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2). <br>
 The procedure based on road segmentation is presented in priority here. The statistical procedure can be found under the section [Other uses](#other-uses).
 
 ### Results
@@ -55,7 +55,7 @@ Table of the f1-scores for each class and for the global results:
 | Global  	    |               0.790     	            |     0.547    	|
 
 
-When using a f1-score giving the same importance to the two classes (artificial and natural), the final f1-score is 0.737 over the training, validation and test area and 0.557 over the other area. <br>
+When using a F1 score giving the same importance to the two classes (artificial and natural), the final F1 score is 0.737 over the training, validation and test area and 0.557 over the other area. <br>
 
 The detailed documentation can be found on [the technical website of the STDL](https://tech.stdl.ch/).
 

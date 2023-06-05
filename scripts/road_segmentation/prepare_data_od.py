@@ -20,13 +20,13 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
-parser.add_argument('config_file', type=str, help='a YAML config file')
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+# parser.add_argument('config_file', type=str, help='a YAML config file')
+# args = parser.parse_args()
 
-logger.info(f"Using {args.config_file} as config file.")
+logger.info(f"Using ... as config file.")
 
-with open(args.config_file) as fp:
+with open('config/config_od.yaml') as fp:
     cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 # Define constants -----------------------------------------
@@ -58,7 +58,7 @@ else:
     NOT_ROAD=[12, 13, 14, 19, 22, 23]
     # Only keep roads and uncovered bridges 
     KUNSTBAUTE_TO_KEEP=[100, 200]
-    # Only keep roads with a artificial or natural surface.
+    # Only keep roads with an artificial or a natural surface.
     BELAGSART_TO_KEEP=[100, 200]
 
     if 'ok_tiles' in cfg.keys():
@@ -105,7 +105,7 @@ if DETERMINE_ROAD_SURFACES:
     roads_parameters_filtered=roads_parameters[~roads_parameters['Width'].isna()].copy()
     roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
 
-    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='inner', left_on='OBJEKTART', right_on='GDB-Code')
 
     uncovered_roads.drop(columns=[
                                 'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1', 'UUID',

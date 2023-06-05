@@ -54,12 +54,13 @@ def get_df_stats_groupby(dataframe, col, groups, suffix=''):
     '''
     stats_df=dataframe.groupby(groups)[col].agg(['min', 'max', 'median', 'mean', 'count', 'std'])
     
-    Z=2
-    stats_df[f'confidence{suffix}'] = Z*stats_df['std']/(stats_df['count']**(1/2))
+    # Get the margin of error for > 95%
+    Z = 2   # Coefficient of 1.96 rounded up
+    stats_df[f'margin{suffix}'] = Z*stats_df['std']/(stats_df['count']**(1/2))
 
     stats_df['mean']=stats_df['mean'].round(2)
     stats_df['std']=stats_df['std'].round(2)
-    stats_df[f'confidence{suffix}']=stats_df[f'confidence{suffix}'].round(2)
+    stats_df[f'margin{suffix}']=stats_df[f'margin{suffix}'].round(2)
 
     if suffix != '':
         rename_dict={'min': f'min{suffix}', 'max': f'max{suffix}', 'median': f'median{suffix}', 'mean': f'mean{suffix}', 
@@ -74,7 +75,7 @@ def get_df_stats_no_group(dataframe, col, results_dict = None, suffix='', to_df 
 
     - dataframe: dataframe from which the statistics will be calculated
     - col: sting indicating the column from which the statistics will be calculated
-    - result dict: dictionary for the results with the key 'min', 'max', 'mean', 'median', 'std', and 'count'
+    - result dict: dictionary for the results with the key 'min', 'max', 'mean', 'median', 'std', 'count' and 'margin'
     - suffix for the name of the columns in the reuslting dataframe
     - to_df: results from dictionary to dataframe
 
@@ -83,7 +84,7 @@ def get_df_stats_no_group(dataframe, col, results_dict = None, suffix='', to_df 
 
     if results_dict==None:
         results_dict={f'min{suffix}': [], f'max{suffix}': [], f'mean{suffix}': [], f'median{suffix}': [], f'std{suffix}': [],
-                    f'count{suffix}': [], f'confidence{suffix}': []}
+                    f'count{suffix}': [], f'margin{suffix}': []}
 
     results_dict[f'min{suffix}'].append(int(dataframe[col].min()))
     results_dict[f'max{suffix}'].append(int(dataframe[col].max()))
@@ -92,9 +93,9 @@ def get_df_stats_no_group(dataframe, col, results_dict = None, suffix='', to_df 
     results_dict[f'std{suffix}'].append(dataframe[col].std().round(2))
     results_dict[f'count{suffix}'].append(dataframe[col].count())
 
-    # Get the confidence interval for > 95%
-    Z = 2
-    results_dict[f'confidence{suffix}'].append(np.round(Z * results_dict[f'std{suffix}'][-1] / (results_dict[f'count{suffix}'][-1]**(1/2)),
+    # Get the margin of error for > 95%
+    Z = 2   # Coefficient of 1.96 rounded up
+    results_dict[f'margin{suffix}'].append(np.round(Z * results_dict[f'std{suffix}'][-1] / (results_dict[f'count{suffix}'][-1]**(1/2)),
                                                         decimals=3))
 
     if to_df:

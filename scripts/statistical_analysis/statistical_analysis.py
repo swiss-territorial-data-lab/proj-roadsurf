@@ -86,7 +86,7 @@ USE_ZONAL_STATS=cfg['use_zonal_stats']
 CORRECT_BALANCE=cfg['correct_balance']
 
 BANDS=range(1,5)
-MAX_CONFIDENCE_INT = cfg['param']['max_confidence']
+MAX_MOE = cfg['param']['max_margin_of_interest']
 COUNT_THRESHOLD = cfg['param']['pixel_threshold']
 
 DO_KS_TEST = cfg['param']['do_ks_test']
@@ -242,11 +242,11 @@ if __name__ == "__main__":
         roads_stats['count']=roads_stats['count_1']
         roads_stats.drop(columns=[f'count_{band}' for band in BANDS], inplace=True)
 
-        large_conf_int=sum([roads_stats[roads_stats[f'confidence_{band}'] > 
-                                            MAX_CONFIDENCE_INT].shape[0] for band in BANDS])
+        large_conf_int=sum([roads_stats[roads_stats[f'margin_{band}'] > 
+                                            MAX_MOE].shape[0] for band in BANDS])
         if large_conf_int != 0:
-            print(f'There are {large_conf_int} confidence intervals larger than' + 
-                    f' {MAX_CONFIDENCE_INT} of pixel value.')
+            print(f'There are {large_conf_int} margin(s) of error larger than' + 
+                    f' {MAX_MOE} of pixel value.')
 
         del roads_stats_subset
 
@@ -260,15 +260,15 @@ if __name__ == "__main__":
 
     roads_stats_filtered=roads_stats_df[
                                     (roads_stats_df['count'] > COUNT_THRESHOLD) 
-                                    & ((roads_stats_df['confidence_1'] < MAX_CONFIDENCE_INT)
-                                    | (roads_stats_df['confidence_2'] < MAX_CONFIDENCE_INT)
-                                    | (roads_stats_df['confidence_3'] < MAX_CONFIDENCE_INT)
-                                    | (roads_stats_df['confidence_4'] < MAX_CONFIDENCE_INT))
-                                    ].drop(columns=[f'confidence_{band}' for band in BANDS]+['count'])
+                                    & ((roads_stats_df['margin_1'] < MAX_MOE)
+                                    | (roads_stats_df['margin_2'] < MAX_MOE)
+                                    | (roads_stats_df['margin_3'] < MAX_MOE)
+                                    | (roads_stats_df['margin_4'] < MAX_MOE))
+                                    ].drop(columns=[f'margin_{band}' for band in BANDS]+['count'])
 
     print(f'{roads_stats_df.shape[0]-roads_stats_filtered.shape[0]} roads on {roads_stats_df.shape[0]}'+
-            f' were dropped because they contained less than {COUNT_THRESHOLD} pixels or their confidence'+
-            f' interval was higher than {MAX_CONFIDENCE_INT} on one or many bands.')
+            f' were dropped because they contained less than {COUNT_THRESHOLD} pixels or their margin of error'+
+            f' was higher than {MAX_MOE} on one or many bands.')
 
     ## Determination of the statistics for the pixels by type
     print('Calculating ratios between bands...')
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     print('Calculating the statistics per band and cover...')
     cover_stats={'cover':[], 'band':[],
                 'min':[], 'max':[], 'mean':[], 'median':[], 'std':[],
-                'confidence': [], 'count':[]}
+                'margin': [], 'count':[]}
 
     for cover_type in pixels_per_band['road_type'].unique().tolist():
 
@@ -306,7 +306,7 @@ if __name__ == "__main__":
 
     cover_stats_df['mean']=cover_stats_df['mean'].round(1)
     cover_stats_df['std']=cover_stats_df['std'].round(1)
-    cover_stats_df['confidence']=cover_stats_df['confidence'].round(1)
+    cover_stats_df['margin']=cover_stats_df['margin'].round(1)
 
     filepath=os.path.join(dirpath_f_tables, 'statistics_roads_by_type.csv')
     cover_stats_df.to_csv(filepath, index=False)
@@ -408,6 +408,7 @@ if __name__ == "__main__":
     if DO_KS_TEST:
         print('Executing the Kolmogorov-Smirnov test...')
         # Null-hypothesis (H_0): the two samples are drawn from the same distribution
+        # WARNING: Result valid only if there is enough samples to consider the distribution continuous.
 
         for band in BANDS_STR:
             ks=[]
