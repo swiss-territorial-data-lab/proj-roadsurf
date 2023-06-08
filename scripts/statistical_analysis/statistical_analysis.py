@@ -409,7 +409,7 @@ if __name__ == "__main__":
                                                 figsize=(2.75,8),
                                                 grid=True,)
         fig = bp_pixel_bands[0].get_figure()
-        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio_part1.webp')
+        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_by_VgNIR_BI.webp')
         fig.savefig(filename, bbox_inches='tight')
         written_files.append(filename)
 
@@ -490,7 +490,7 @@ if __name__ == "__main__":
         print('Calculating PCAs...') 
 
         print('-- PCA of the pixel values...')
-        features = BANDS_STR + bands_ratio + ['road_width']
+        features = BANDS_STR + bands_ratio + ['VgNIR-BI', 'road_width']
         to_describe='road_type'
 
         written_files_pca_pixels=fs.pca_procedure(pixels_per_band, features, to_describe,
