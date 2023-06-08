@@ -20,13 +20,13 @@ logger = logging.getLogger('root')
 tic = time.time()
 logger.info('Starting...')
 
-# parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
-# parser.add_argument('config_file', type=str, help='a YAML config file')
-# args = parser.parse_args()
+parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+parser.add_argument('config_file', type=str, help='a YAML config file')
+args = parser.parse_args()
 
-logger.info(f"Using ... as config file.")
+logger.info(f"Using {args.config_file} as config file.")
 
-with open('config/config_od.yaml') as fp:
+with open(args.config_file) as fp:
     cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 # Define constants -----------------------------------------

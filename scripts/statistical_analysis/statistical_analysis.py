@@ -274,16 +274,20 @@ if __name__ == "__main__":
     print('Calculating ratios between bands...')
 
     names={'1/2': 'R/G', '1/3': 'R/B', '1/4': 'R/NIR', '2/3': 'G/B', '2/4': 'G/NIR', '3/4': 'B/NIR'}
-    bands_ratio = ['VgNIR-BI'] + list(names.values())
+    bands_ratio = list(names.values())
 
     for band in BANDS:
         for sec_band in range(band+1, max(BANDS)+1):
             pixels_per_band[names[f'{band}/{sec_band}']] = \
                 pixels_per_band[f'band{band}'].astype('float64')/pixels_per_band[f'band{sec_band}'].astype('float64')
+            pixels_per_band[names[f'{band}/{sec_band}']] = pixels_per_band[names[f'{band}/{sec_band}']].round(3)
+            pixels_per_band.loc[np.isnan(pixels_per_band[names[f'{band}/{sec_band}']]), names[f'{band}/{sec_band}']]=0
+            pixels_per_band.loc[~np.isfinite(pixels_per_band[names[f'{band}/{sec_band}']]), names[f'{band}/{sec_band}']]=1
 
     pixels_per_band['VgNIR-BI']=(
                 pixels_per_band['band2'].astype('float64') - pixels_per_band['band4'].astype('float64'))/(
                     pixels_per_band['band2'].astype('float64') + pixels_per_band['band4'].astype('float64'))
+    pixels_per_band['VgNIR-BI'] = pixels_per_band['VgNIR-BI'].round(5)
 
     print('Calculating the statistics per band and cover...')
     cover_stats={'cover':[], 'band':[],
@@ -374,20 +378,40 @@ if __name__ == "__main__":
         ### Boxplots of the pixel values
         bp_pixel_bands=pixels_per_band[BANDS_STR + ['road_type']].plot.box(by='road_type',
                                                 title=f'Repartition of the values for the pixels',
-                                                figsize=(10,8),
-                                                grid=True)
-        fig = bp_pixel_bands[0].get_figure()
-        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands.jpg'), bbox_inches='tight')
-        written_files.append(f'final/images/{balance}boxplot_pixel_in_bands.jpg')
-
-        bp_pixel_bands=pixels_per_band[bands_ratio  + ['road_type']].plot.box(by='road_type',
-                                                title=f'Repartition of the values for the pixels',
                                                 figsize=(12,8),
                                                 grid=True)
         fig = bp_pixel_bands[0].get_figure()
-        fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio.jpg'), bbox_inches='tight')
-        written_files.append(f'final/images/{balance}boxplot_pixel_in_bands_ratio.jpg')
+        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands.webp')
+        fig.savefig(filename, bbox_inches='tight')
+        written_files.append(filename)
 
+        bp_pixel_bands=pixels_per_band[bands_ratio[:3]  + ['road_type']].plot.box(by='road_type',
+                                                title=f'Repartition of the values for the pixels',
+                                                figsize=(10,8),
+                                                grid=True, 
+                                                logy=True)
+        fig = bp_pixel_bands[0].get_figure()
+        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio_part1.webp')
+        fig.savefig(filename, bbox_inches='tight')
+        written_files.append(filename)
+
+        bp_pixel_bands=pixels_per_band[bands_ratio[3:]  + ['road_type']].plot.box(by='road_type',
+                                                title=f'Repartition of the values for the pixels',
+                                                figsize=(12,8),
+                                                grid=True, 
+                                                logy=True)
+        fig = bp_pixel_bands[0].get_figure()
+        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio_part2.webp')
+        fig.savefig(filename, bbox_inches='tight')
+        written_files.append(filename)
+
+        bp_pixel_bands=pixels_per_band[['VgNIR-BI']  + ['road_type']].plot.box(by='road_type',
+                                                figsize=(2.75,8),
+                                                grid=True,)
+        fig = bp_pixel_bands[0].get_figure()
+        filename=os.path.join(dirpath_f_images, f'{balance}boxplot_pixel_in_bands_ratio_part1.webp')
+        fig.savefig(filename, bbox_inches='tight')
+        written_files.append(filename)
 
         ### Boxplots of the statistics
         for band in BANDS_STR:
@@ -397,12 +421,13 @@ if __name__ == "__main__":
             roads_stats_subset=roads_stats_filtered[col_to_keep + ['road_type']].copy()
             roads_stats_plot=roads_stats_subset.plot.box(by='road_type',
                                                         title=f'Boxplot of the statistics for the {band} band',
-                                                        figsize=(30,8),
+                                                        figsize=(15,8),
                                                         grid=True)
 
             fig = roads_stats_plot[0].get_figure()
-            fig.savefig(os.path.join(dirpath_f_images, f'{balance}boxplot_stats_band_{band}.jpg'), bbox_inches='tight')
-            written_files.append(f'final/images/{balance}boxplot_stats_band_{band}.jpg') 
+            filename=os.path.join(dirpath_f_images, f'{balance}boxplot_stats_band_{band}.webp')
+            fig.savefig(filename, bbox_inches='tight')
+            written_files.append(filename) 
 
 
     if DO_KS_TEST:

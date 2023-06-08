@@ -286,13 +286,9 @@ def plot_pca(coor_PC, results_PCA, pca,
             margin=dict(l=20, r=10, t=40, b=10),
         )
 
-        file_graph_feat = os.path.join(dirpath_images, file_prefix + f'PC1{pc}_features.jpeg')
-        fig.write_image(file_graph_feat)
-        
-        file_graph_feat_webp = file_graph_feat.replace('jpeg','webp')
+        file_graph_feat_webp = os.path.join(dirpath_images, file_prefix + f'PC1{pc}_features.webp')
         fig.write_image(file_graph_feat_webp)
 
-        written_files.append(file_graph_feat)
         written_files.append(file_graph_feat_webp)
 
     return written_files

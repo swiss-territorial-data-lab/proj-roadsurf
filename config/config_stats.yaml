@@ -35,7 +35,7 @@ generate_tilesets.py:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     orthophotos_web_service:
       type: XYZ
-      url: https://titiler.vm-gpu-01.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/mosaic_3857.json&bidx=2&bidx=3&bidx=4&bidx=1&no_data=0&return_mask=false&pixel_selection=lowest
+      url: https://titiler.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/proj-roadsurf/mosaic-z17-z20.json&bidx=2&bidx=3&bidx=4&bidx=1&nodata=0&pixel_selection=lowest
       srs: "EPSG:3857"
   output_folder: outputs/obj_detector
   tile_size: 256 # per side, in pixels
@@ -43,7 +43,7 @@ generate_tilesets.py:
   n_jobs: 10
 
 statistical_analysis.py:
-  debug_mode: true
+  debug_mode: false
   use_zonal_stats: false
   correct_balance: false
   processed:
