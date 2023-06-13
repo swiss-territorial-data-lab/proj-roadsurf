@@ -175,7 +175,7 @@ def determine_detected_class(predictions, ground_truth, threshold=0):
 
     final_type_df=pd.DataFrame(final_type)
 
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID', 'geometry', 'CATEGORY']],
+    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID', 'geometry', 'CATEGORY', 'gt_type']],
                                     how='inner', left_on='road_id', right_on='OBJECTID'))
 
     return comparison_df

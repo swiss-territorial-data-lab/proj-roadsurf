@@ -219,6 +219,9 @@ visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
 predictions_2056=predictions.to_crs(epsg=2056)
 
 predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
+predicted_roads_filtered.drop(columns=['OBJEKTART', 'KUNSTBAUTE', 'BELAGSART', 'road_width', 'road_len',
+                                       'CATEGORY', 'SUPERCATEGORY', 'gt_type', 'GDB-Code', 'Width',
+                                        'title', 'tile_id', 'area_label', 'crs', 'dataset', 'joined_area'])
 
 del visible_ground_truth_2056, ground_truth, predictions_2056
 
