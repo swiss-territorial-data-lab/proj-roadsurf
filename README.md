@@ -3,63 +3,29 @@
 
 ### Table of content
 
-- [Description](#description)
-    - [Goal](#goal)
-    - [Data](#data)
-    - [Method](#method)
-    - [Results](#results)
+- [Introduction](#introduction)
 - [Installation](#installation)
 - [Getting started](#getting-started)
     - [Folder structure](#folder-structure)
     - [Workflow](#workflow)
 - [Other Uses](#other-uses)
     - [Preprocessing](#preprocessing)
-    - [Statistical procedure](#statistical-procedure)
+    - [Machine-learning procedure](#machine-learning-procedure)
 
 
-## Description
+## Introduction
 
-### Goal
-The goal of this project is to classify the roads of Switzerland based on their surface type, artificial or natural. This work is currently done by operators at the Swiss Federal Office of Topography (swisstopo) and this is a time-consuming and repetitive task, therefore adapted to the automatization thank to data science. <br>
+In this project, the roads of Switzerland were classified based on their surface type, artificial or natural. The ultimate goal was to integrate this information to the 3D topographic model of Switzerland <br>
+When using a F1 score giving the same importance to the two classes (artificial and natural), the final F1 score is 0.737 over the training, validation and test area and 0.557 over the inference-only area. <br>
 
-### Data
-Initial data:
-- [swissTLM3D](https://www.swisstopo.admin.ch/en/geodata/landscape/tlm3d.html):
-    - roads as line,
-    - forests as polygons,
-- [SWISSIMAGE](https://www.swisstopo.admin.ch/en/geodata/images/ortho.html):
-    - SWISSIMAGE 10 cm,
-- Area of interest (AOI):
-    - 4 tiles of the 1:25'000 national map situated in the region of the Emmental,
-- quarries as polygons.
+The full documentation can be found on the [STDL technical website](https://tech.stdl.ch/).
 
-The starting point of the method are the line of the roads from the product swissTLM3D. Only the class "3m Strasse" was a problem for the operators, so the procedure is focused on this particular class. <br>
-Here, the images used are the ones from the product SWISSIMAGE 10 cm made available by swisstopo in a WMTS service. Better results are achieved when using the product SWISSIMAGE RS and processing it to a WMTS service like proposed in the part [Other uses](#other-uses). However, this procedure is more complicated and time-consuming. <br>
+The initial data are described in the dedicated `data` folder.
 
-### Method
-
-<figure align="center">
-<image src="img/proj_roadsurf_flow.jpeg" alt="Diagram of the methodology" style="width:60%;">
-<figcaption align="center">Simplified diagram of the methodology for this project.</figcaption> 
-</figure>
-
-We first searched for statistical differences between the classes in order to perform a supervised classification based on machine-learning methods. As we could not find any significative difference between the roads, we used artificial intelligence for the detection and classification of the roads. The [object detector of the STDL](https://github.com/swiss-territorial-data-lab/object-detector) was used. It is based on [detectron2 by FAIR](https://github.com/facebookresearch/detectron2). <br>
-The procedure based on road segmentation is presented in priority here. The statistical procedure can be found under the section [Other uses](#other-uses).
-
-### Results
-Table of the f1-scores for each class and for the global results: 
-|           	| Training, validation and test area 	| Other area 	|
-|:---          	|:---:                                  |:---: 	        |
-| Artificial 	|               0.959     	            |     0.916    	|
-| Natural    	|               0.616     	            |     0.134    	|
-| Global  	    |               0.790     	            |     0.547    	|
-
-
-When using a F1 score giving the same importance to the two classes (artificial and natural), the final F1 score is 0.737 over the training, validation and test area and 0.557 over the other area. <br>
-
-The detailed documentation can be found on [the technical website of the STDL](https://tech.stdl.ch/).
 
 ## Installation
+The procedure was tested on Ubuntu 20.04. <br>
+
 In order to run the project, you will need :
 - this repository,
 - the repository of the [object detector](https://github.com/swiss-territorial-data-lab/object-detector),
@@ -112,7 +78,8 @@ python scripts/road_segmentation/final_metrics.py
 ## Other uses
 
 ### Preprocessing
-To reproduce exactly the procedure described in the technical documentation, you will have to use the product SWISSIMAGE RS instead of SWISSIMAGE 10 cm. We obtained it on a hard disk and transferred it to our S3 cloud with the script `RS_images_to_S3.py`.
+Here, the included WTMS-link is the pointing the product [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html). Better results are achieved when using the product [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) and processing it to a WMTS-like service like described in the documentation. <br>
+We obtained the images on a hard disk and transferred it to our S3 cloud with the script `RS_images_to_S3.py`.
 Then, with the help of the script `tif2cog.py`, the images were transformed from 16-bits TIFF to 8-bits Cloud Optimized GeoTiff files and Titiler was used to access them like tiles in a WMTS service.
 
 ```
@@ -120,13 +87,18 @@ python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
 python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 ```
 
-### Statistical procedure
+### Machine-learning procedure
+
+<figure align="center">
+<image src="img/proj_roadsurf_flow.jpeg" alt="Diagram of the methodology" style="width:60%;">
+<figcaption align="center">Simplified diagram of the methodology for this project.</figcaption> 
+</figure>
+
+Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described here below.
 
 <figure align="center">
 <image src="img/statistical_flow.jpeg" alt="flow for the research of a statistical differences">
 </figure>
-
-Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure was the following:
 
 ```
 python scripts/statistical_analysis/prepare_data.py config/config_stats.yaml
