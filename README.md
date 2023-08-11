@@ -15,8 +15,8 @@
 
 ## Introduction
 
-In this project, the roads of Switzerland were classified based on their surface type, artificial or natural. The ultimate goal was to integrate this information to the 3D topographic model of Switzerland <br>
-When using a F1 score giving the same importance to the two classes (artificial and natural), the final F1 score is 0.737 over the training, validation and test area and 0.557 over the inference-only area. <br>
+In this project, the roads of Switzerland were classified according to whether they had an artificial or natural surface. The final objective was to integrate this information into the 3D topographic model of Switzerland. <br>
+Using a F1 score giving the same importance to both classes (artificial and natural), the final F1 score is 0.737 for the training, validation and test area and 0.557 for the inference-only area. <br>
 
 The full documentation can be found on the [STDL technical website](https://tech.stdl.ch/).
 
@@ -78,9 +78,9 @@ python scripts/road_segmentation/final_metrics.py
 ## Other uses
 
 ### Preprocessing
-Here, the included WTMS-link is the pointing the product [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html). Better results are achieved when using the product [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) and processing it to a WMTS-like service like described in the documentation. <br>
-We obtained the images on a hard disk and transferred it to our S3 cloud with the script `RS_images_to_S3.py`.
-Then, with the help of the script `tif2cog.py`, the images were transformed from 16-bits TIFF to 8-bits Cloud Optimized GeoTiff files and Titiler was used to access them like tiles in a WMTS service.
+Here, the included WTMS link points the [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html) product. Better results are achieved when using the [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) product and processing it to a WMTS-type service as described in the documentation. <br>
+We obtained the images on a hard disk and transferred them to our S3 cloud using the script `RS_images_to_S3.py`.
+Then, using the script `tif2cog.py`, the images were transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files and TiTiler was used to access them as tiles in a WMTS service.
 
 ```
 python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
