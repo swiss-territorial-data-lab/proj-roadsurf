@@ -52,7 +52,7 @@ def get_roads_in_quarries(quarries, roads):
 
     roads_in_quarries=gpd.sjoin(roads, buffered_quarries_4326, predicate='within')
     roads_not_in_quarries=roads[~roads['OBJECTID'].isin(
-                                    roads_in_quarries['OBJECTID'].unique().tolist())] 
+                                    roads_in_quarries['OBJECTID'].unique().tolist())].reset_index(drop=True)
 
     return roads_in_quarries, roads_not_in_quarries
 

@@ -1,4 +1,6 @@
 output*
+*.qgz
+**/*temp*
 
 # Byte-compiled files
 **/__pycache__/

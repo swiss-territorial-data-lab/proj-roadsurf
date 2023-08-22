@@ -163,14 +163,14 @@ if DETERMINE_ROAD_SURFACES:
 
     ## cf. https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
     corr_overlap = buffered_roads.copy()
-    for idx in tqdm(intersect_other_width.index, total=intersect_other_width.shape[0],
+    for intersecting_road in tqdm(intersect_other_width.itertuples(), total=intersect_other_width.shape[0],
                 desc='-- Suppressing the overlap of roads with different width'):
         
         poly1_id=corr_overlap.index[
-                corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_1']
+                corr_overlap['OBJECTID']==intersecting_road.OBJECTID_1
             ].values.astype(int)[0]
         poly2_id=corr_overlap.index[
-                corr_overlap['OBJECTID']==intersect_other_width.loc[idx,'OBJECTID_2']
+                corr_overlap['OBJECTID']==intersecting_road.OBJECTID_2
             ].values.astype(int)[0]
         
         corr_overlap=fct_misc.polygons_diff_without_artifacts(corr_overlap, poly1_id, poly2_id, keep_everything=True)
@@ -318,7 +318,7 @@ if GENERATE_LABELS:
                     'in the generation of the tilesets to ensure the correct selection of the tiles.')
 
     if RESTRICTED_AOI_TRAIN:
-        logger.info('A subset of the AOI is used for the traning.')
+        logger.info('A subset of the AOI is used for the training.')
         restricted_aoi_training=gpd.read_file(RESTRICTED_AOI_TRAIN)
         restricted_aoi_training_4326=restricted_aoi_training.to_crs(epsg=4326)
         tiles_in_restricted_aoi_4326=gpd.sjoin(tiles_in_restricted_aoi_4326,
