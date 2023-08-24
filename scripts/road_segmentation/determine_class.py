@@ -104,32 +104,34 @@ def get_weighted_scores(ground_truth, predictions):
     ground_truth['area_label']=ground_truth.area
 
     fct_misc.test_crs(ground_truth.crs, predictions.crs)
-    predicted_roads=gpd.overlay(ground_truth, predictions, how='intersection')
+    all_intersections=gpd.overlay(ground_truth, predictions, how='intersection')
 
-    predicted_roads=predicted_roads[(~predicted_roads['BELAGSART'].isna()) &
-                                                (~predicted_roads['score'].isna())].copy()
-    predicted_roads['joined_area']=predicted_roads.area
-    predicted_roads['area_pred_in_label']=round(predicted_roads['joined_area']/predicted_roads['area_label'], 2)
-    predicted_roads['weighted_score']=predicted_roads['area_pred_in_label']*predicted_roads['score']
+    all_predicted_roads=all_intersections[(~all_intersections['BELAGSART'].isna()) &
+                                                (~all_intersections['score'].isna())].copy()
+    all_predicted_roads['joined_area']=all_predicted_roads.area
+    all_predicted_roads['area_pred_in_label']=round(all_predicted_roads['joined_area']/all_predicted_roads['area_label'], 2)
+    all_predicted_roads['weighted_score']=all_predicted_roads['area_pred_in_label']*all_predicted_roads['score']
+
+    predicted_roads=all_predicted_roads[all_predicted_roads.area_pred_in_label > 0.05].copy()
 
     return predicted_roads
 
-def determine_detected_class(predictions, ground_truth, threshold=0):
+def determine_detected_class(predictions, roads, threshold=0):
     '''
     Determine the detected class for the road surface by combining the multiple detections.
 
     - predictions: dataframe of the predicted road surface
-    - ground_truth: dataframe of the ground truth
+    - roads: dataframe of the road polygons
     - threshold: threshold for the confidence score
-    return: a dataframe with the actual and predicted surface type and the combined artificial and natural confidence score,
-        as well as their difference.
+    return: a dataframe with predicted surface type and the combined artificial and natural confidence score, as well as their difference.
+        If available, return the actual suface type from the gt.
     '''
 
     final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
     valid_predictions=predictions[predictions['score']>=threshold]
     detected_roads_id=valid_predictions['OBJECTID'].unique().tolist()
 
-    for road_id in ground_truth['OBJECTID'].unique().tolist():
+    for road_id in roads['OBJECTID'].unique().tolist():
 
         if road_id not in detected_roads_id:
             final_type['road_id'].append(road_id)
@@ -175,8 +177,12 @@ def determine_detected_class(predictions, ground_truth, threshold=0):
 
     final_type_df=pd.DataFrame(final_type)
 
-    comparison_df=gpd.GeoDataFrame(final_type_df.merge(ground_truth[['OBJECTID', 'geometry', 'CATEGORY', 'gt_type']],
-                                    how='inner', left_on='road_id', right_on='OBJECTID'))
+    columns_to_keep=['OBJECTID', 'geometry']
+    if 'gt_type' in roads.columns:
+        columns_to_keep.extend(['CATEGORY', 'gt_type'])
+
+    comparison_df=gpd.GeoDataFrame(final_type_df.merge(roads[columns_to_keep],
+                                how='inner', left_on='road_id', right_on='OBJECTID'))
 
     return comparison_df
 
@@ -219,7 +225,7 @@ if __name__ == "__main__":
 
     road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
-    ground_truth=gpd.read_file(ROADS)
+    initial_road_polygons=gpd.read_file(ROADS)
 
     labels_id=pd.read_json(LABELS_ID, orient='index')
     logger.info('Possible classes:')
@@ -239,38 +245,31 @@ if __name__ == "__main__":
 
     logger.info('Filtering the GT for the roads of interest...')
     filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
-    filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
+    filtered_road_polys=initial_road_polygons.merge(filtered_road_parameters[['GDB-Code','Width']], 
                                             how='inner',left_on='OBJEKTART',right_on='GDB-Code')
-    filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997]
-
-    try:
-        filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
-    except AttributeError:
-        logger.info('The provided roads do not have a known surface type.')
-        filtered_ground_truth['CATEGORY']='unknown'
 
     # Roads in quarries are always naturals
     logger.info('-- Roads in quarries are always naturals...')
 
-    roads_in_quarries, filtered_ground_truth = get_roads_in_quarries(quarries, filtered_ground_truth)
+    roads_in_quarries, filtered_road_polys = get_roads_in_quarries(quarries, filtered_road_polys)
     filepath=os.path.join(shp_gpkg_folder, 'roads_in_quarries.shp')
     roads_in_quarries.to_file(filepath)
     written_files.append(os.path.join(filepath))
 
     logger.info('Limiting the labels to the visible area of labels and predictions...')
 
-    visible_ground_truth=clip_labels(filtered_ground_truth, tiles[['title', 'id', 'geometry']])
+    visible_road_polys=clip_labels(filtered_road_polys, tiles[['title', 'id', 'geometry']])
 
     logger.info('Getting the intersecting area between predictions and labels...')
 
-    visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
+    visible_road_polys_2056=visible_road_polys.to_crs(epsg=2056)
     predictions_2056=predictions.to_crs(epsg=2056)
 
-    predicted_roads=get_weighted_scores(visible_ground_truth_2056, predictions_2056)
+    predicted_roads=get_weighted_scores(visible_road_polys_2056, predictions_2056)
 
-    del visible_ground_truth_2056, ground_truth, predictions_2056
+    del visible_road_polys_2056, initial_road_polygons, predictions_2056
 
-    final_roads=determine_detected_class(predicted_roads, filtered_ground_truth, THRESHOLD)
+    final_roads=determine_detected_class(predicted_roads, filtered_road_polys, THRESHOLD)
     
     filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
     final_roads.to_file(filepath)
