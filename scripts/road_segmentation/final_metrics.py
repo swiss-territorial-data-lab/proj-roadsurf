@@ -101,7 +101,7 @@ def get_metrics(comparison_df, CLASSES):
     if weighted_precision==0 and weighted_recall==0:
         weighted_f1_score=0
     else:
-        weighted_f1_score=round(2*weighted_precision*weighted_recall/(weighted_precision + weighted_recall), 2)
+        weighted_f1_score=2*weighted_precision*weighted_recall/(weighted_precision + weighted_recall)
 
     balanced_precision=metrics_df['Pk'].sum()/2
     balanced_recall=metrics_df['Rk'].sum()/2
@@ -109,7 +109,7 @@ def get_metrics(comparison_df, CLASSES):
     if balanced_precision==0 and balanced_recall==0:
         balanced_f1_score=0
     else:
-        balanced_f1_score=round(2*balanced_precision*balanced_recall/(balanced_precision + balanced_recall), 2)
+        balanced_f1_score=2*balanced_precision*balanced_recall/(balanced_precision + balanced_recall)
 
     global_metrics_df=pd.DataFrame({'Pw': [weighted_precision], 'Rw': [weighted_recall], 'f1w': [weighted_f1_score],
                                     'Pb': [balanced_precision], 'Rb': [balanced_recall], 'f1b': [balanced_f1_score]})
@@ -148,9 +148,9 @@ def show_metrics(metrics_by_class, global_metrics):
             f"and a recall of {round(metric.Rk, 2)}")
 
     logger.info('%s %s %s',
-        f"The final f1-score is {global_metrics.f1w[0]}", 
-        f"with a precision of {round(global_metrics.Pw[0],2)} and a recall of",
-        f"{round(global_metrics.Rw[0],2)}.")
+        f"The final f1-score is {round(global_metrics.f1b[0], 2)}", 
+        f"with a precision of {round(global_metrics.Pb[0],2)} and a recall of",
+        f"{round(global_metrics.Rb[0],2)}.")
 
 
 # Importing files ----------------------------------
@@ -277,6 +277,11 @@ print('\n')
 logger.info("Metrics for the validation dataset:")
 show_metrics(best_val_by_class_metrics, best_val_global_metrics)
 
+by_class_metrics=best_val_by_class_metrics.copy()
+by_class_metrics['dataset']='validation'
+global_metrics=best_val_global_metrics.copy()
+global_metrics['dataset']='validation'
+
 print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
 comparison_df=determine_class.determine_detected_class(predicted_roads_filtered, filtered_ground_truth, best_threshold)
@@ -295,23 +300,40 @@ best_comparison_df=comparison_df.copy()
 
 show_metrics(best_metrics_by_class, best_global_metrics)
 
+best_metrics_by_class['dataset']='all datasets'
+best_metrics_by_class['threshold']=best_threshold
+by_class_metrics=pd.concat([by_class_metrics, best_metrics_by_class], ignore_index=True)
+
+best_global_metrics['dataset']='all datasets'
+best_global_metrics['threshold']=best_threshold
+global_metrics=pd.concat([global_metrics, best_global_metrics], ignore_index=True)
+
 filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
 best_comparison_df.to_file(filepath)
 written_files.append(filepath)
 
-print('\n')
-logger.info(f"If we were to keep all the predictions, the metrics would be...")
-all_preds_comparison_df=determine_class.determine_detected_class(predicted_roads_filtered, filtered_ground_truth, 0)
+if best_threshold != 0:
+    print('\n')
+    logger.info(f"If we were to keep all the predictions, the metrics would be...")
+    all_preds_comparison_df=determine_class.determine_detected_class(predicted_roads_filtered, filtered_ground_truth, 0)
 
-all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
+    all_preds_comparison_df['tag']=all_preds_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-all_preds_metrics_by_class, all_preds_global_metrics = get_metrics(all_preds_comparison_df, CLASSES)
+    all_preds_metrics_by_class, all_preds_global_metrics = get_metrics(all_preds_comparison_df, CLASSES)
 
-show_metrics(all_preds_metrics_by_class, all_preds_global_metrics)
+    show_metrics(all_preds_metrics_by_class, all_preds_global_metrics)
 
-filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
-all_preds_comparison_df.to_file(filepath)
-written_files.append(filepath)
+    all_preds_metrics_by_class['dataset']='all predictions without filter'
+    all_preds_metrics_by_class['threshold']=0
+    by_class_metrics=pd.concat([by_class_metrics, all_preds_metrics_by_class], ignore_index=True)
+
+    all_preds_global_metrics['dataset']='all predictions without filter'
+    all_preds_global_metrics['threshold']=0
+    global_metrics=pd.concat([global_metrics, all_preds_global_metrics], ignore_index=True)
+
+    filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
+    all_preds_comparison_df.to_file(filepath)
+    written_files.append(filepath)
 
 if 'oth' in PREDICTIONS.keys():
     print('\n')
@@ -328,6 +350,14 @@ if 'oth' in PREDICTIONS.keys():
 
     show_metrics(not_oth_metrics_by_class, not_oth_global_metrics)
 
+    not_oth_metrics_by_class['dataset']='training zone (trn, val, tst)'
+    not_oth_metrics_by_class['threshold']=best_threshold
+    by_class_metrics=pd.concat([by_class_metrics, not_oth_metrics_by_class], ignore_index=True)
+
+    not_oth_global_metrics['dataset']='training zone (trn, val, tst)'
+    not_oth_global_metrics['threshold']=best_threshold
+    global_metrics=pd.concat([global_metrics, not_oth_global_metrics], ignore_index=True)
+
     print('\n')
     logger.info('Metrics based on the predictions of the oth dataset...')
 
@@ -340,6 +370,15 @@ if 'oth' in PREDICTIONS.keys():
     oth_metrics_by_class, oth_global_metrics = get_metrics(oth_comparison_df,  CLASSES)
 
     show_metrics(oth_metrics_by_class, oth_global_metrics)
+
+    oth_metrics_by_class['dataset']='inference-only zone'
+    oth_metrics_by_class['threshold']=best_threshold
+    by_class_metrics=pd.concat([by_class_metrics, oth_metrics_by_class], ignore_index=True)
+
+    oth_global_metrics['dataset']='inference-only zone'
+    oth_global_metrics['threshold']=best_threshold
+    global_metrics=pd.concat([global_metrics, oth_global_metrics], ignore_index=True)
+
 
 print('\n')
 logger.info('-- Calculating the accuracy...')
@@ -457,8 +496,24 @@ if True:
 
     class_metrics_all_art, global_metrics_all_art=get_metrics(comp_df_all_art, CLASSES)
     show_metrics(class_metrics_all_art, global_metrics_all_art)
+
+    class_metrics_all_art['dataset']='baseline'
+    by_class_metrics=pd.concat([by_class_metrics, class_metrics_all_art], ignore_index=True)
+
+    global_metrics_all_art['dataset']='baseline'
+    global_metrics=pd.concat([global_metrics, global_metrics_all_art], ignore_index=True)
+
     print('\n')
 
+table_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
+
+tmp=by_class_metrics.select_dtypes(include=[np.number])
+by_class_metrics.loc[:, tmp.columns] = np.round(tmp, 3)
+by_class_metrics.to_csv(os.path.join(table_folder, 'by_class_metrics.csv'))
+
+tmp=global_metrics.select_dtypes(include=[np.number])
+global_metrics.loc[:, tmp.columns] = np.round(tmp, 3)
+global_metrics.to_csv(os.path.join(table_folder, 'global metrics.csv'))
 
 logger.info('Calculate the bin accuracy to estimate the calibration...')
 accuracy_tables=[]
