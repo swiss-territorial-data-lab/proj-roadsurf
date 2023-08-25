@@ -8,7 +8,7 @@ import os, sys
 import argparse
 import yaml
 import logging, logging.config
-import time
+from time import time
 from tqdm import tqdm
 
 sys.path.insert(1, 'scripts')
@@ -17,7 +17,7 @@ import functions.fct_misc as fct_misc
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('root')
 
-tic = time.time()
+tic = time()
 logger.info('Starting...')
 
 parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
@@ -389,3 +389,6 @@ logger.info('All done!')
 logger.info('Written files:')
 for file in written_files:
     logger.info(file)
+
+toc = time()
+logger.info(f"Nothing left to be done: exiting. Elapsed time: {(toc-tic):.2f} seconds")
