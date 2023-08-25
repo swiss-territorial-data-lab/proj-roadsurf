@@ -16,7 +16,7 @@ prepare_data_od.py:
   processed_input:
     roads_for_labels: roads_for_OD.shp
   output_folder: outputs
-  # ok_tiles: ../data/AOI/ok_tiles_info_rich_tiles_230714.geojson  # relative path from the output folder
+  # ok_tiles: <relative path from the output folder>
   zoom_level: 18  # keep between 17 and 20  
 
 limit_used_tiles.py:
@@ -36,12 +36,12 @@ generate_tilesets.py:
     other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
-      url: https://titiler.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/proj-roadsurf/mosaic-z17-z20.json&bidx=2&bidx=3&bidx=4&nodata=0&pixel_selection=lowest
+      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2018/3857/{z}/{x}/{y}.jpeg
       srs: "EPSG:3857"
   output_folder: outputs/obj_detector
   tile_size: 256 # per side, in pixels
   overwrite: False
-  n_jobs: 1
+  n_jobs: 10
   COCO_metadata:
     year: 2022
     version: 2.0
@@ -80,7 +80,7 @@ make_predictions.py:
       oth: COCO_oth.json
   detectron2_config_file: ../../config/detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: 'logs/model_0010499.pth'
+      pth_file: 'logs/model_0007999.pth'
   rdp_simplification: # rdp = Ramer-Douglas-Peucker
     enabled: true
     epsilon: 0.75 # cf. https://rdp.readthedocs.io/en/latest/
