@@ -33,7 +33,7 @@ generate_tilesets.py:
   datasets:
     aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: outputs/json_inputs/ground_truth_labels.geojson
-    # other_labels_geojson: outputs/json_inputs/other_labels.geojson
+    other_labels_geojson: outputs/json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
       url: https://titiler.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/proj-roadsurf/mosaic-z17-z20.json&bidx=2&bidx=3&bidx=4&nodata=0&pixel_selection=lowest

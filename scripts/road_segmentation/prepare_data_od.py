@@ -90,6 +90,7 @@ def determine_category(row):
 # Information treatment ------------------------------------------
 
 if DETERMINE_ROAD_SURFACES:
+    print()
     logger.info('Importing files...')
 
     roads=gpd.read_file(ROADS_IN)
@@ -208,6 +209,7 @@ if GENERATE_TILES_INFO or GENERATE_LABELS:
         roads_parameters=pd.read_excel(ROADS_PARAM)
 
 if GENERATE_TILES_INFO:
+    print()
     aoi=gpd.read_file(AOI)
 
     logger.info('Determination of the information for the tiles to consider...')
@@ -277,9 +279,14 @@ if GENERATE_TILES_INFO:
 
     tiles_in_restricted_aoi['id'] = ['('+ x +', '+y+', '+z + ')' for x, y, z in xyz]
 
+    print()
+    logger.info(f'{tiles_in_restricted_aoi.shape[0]} tiles can be considered.')
+    print()
+
     logger.info('Done determining the tiles!')
 
 if GENERATE_LABELS:
+    print()
     logger.info('Generating the labels for the object detector...')
 
     if not GENERATE_TILES_INFO:
@@ -354,6 +361,13 @@ if GENERATE_LABELS:
     except Exception as e:
         logger.warning(e)
         sys.exit(1)
+
+    print()
+    logger.info(f'{GT_labels_gdf.shape[0]} labels are saved as ground truth.')
+    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.BELAGSART==100].shape[0]} labels are tagged artificial')
+    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.BELAGSART==200].shape[0]} labels are tagged natural.')
+    logger.info(f'{OTH_labels_gdf.shape[0]} labels are saved as the other lables.')
+    print()
 
     logger.info('Done generating the labels for the object detector...')
 
