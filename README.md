@@ -7,18 +7,19 @@
 - [Installation](#installation)
 - [Getting started](#getting-started)
     - [Folder structure](#folder-structure)
-    - [Workflow](#workflow)
-- [Other Uses](#other-uses)
+    - [Deep learning workflow](#deep-learning-workflow)
+- [Additional uses](#additional-uses)
     - [Preprocessing](#preprocessing)
     - [Machine-learning procedure](#machine-learning-procedure)
 
 
 ## Introduction
 
-In this project, the roads of Switzerland were classified according to whether they had an artificial or natural surface. The final objective was to integrate this information into the 3D topographic model of Switzerland. <br>
-Using a F1 score giving the same importance to both classes (artificial and natural), the final F1 score is 0.737 for the training, validation and test area and 0.557 for the inference-only area. <br>
+The aim of this project is to classify the roads of Switzerland according to whether they have an artificial or natural surface. The final objective was to integrate this information into [swissTLM3D](https://www.swisstopo.admin.ch/fr/geodata/landscape/tlm3d.html), the 3D topographic model of Switzerland. <br>
+Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.XXX for the validation area and 0.557 for the inference-only area. The algorithm  has an approach based on deep learning using the STDL's object detector.<br>
+A procedure based on machine learning was tested, but not completed as no significant statistical difference could be found between the classes.
 
-The full documentation can be found on the [STDL technical website](https://tech.stdl.ch/).
+The full documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
 
 The initial data are described in the dedicated `data` folder.
 
@@ -53,13 +54,13 @@ pip install -r requirements.txt
 ├── img                         # Image folder for the readme
 ├── scripts
 |   ├── functions               # Functions files
-|   ├── preprocessing           # One-time scripts used in preprocessing
-|   ├── road_segmentation       # Scripts used in the procedure based on the road segmentation
+|   ├── preprocessing           # Scripts used in preprocessing
+|   ├── road_segmentation       # Scripts used in the procedure based on deep learning and using the STDL's object detector
 |   ├── sandbox                 # Scripts that were not implemented in the final procedure
-|   ├── statistical_analysis    # Scripts used in the procedure based on the supervised classification
+|   ├── statistical_analysis    # Scripts used in the procedure based on machine learning
 ```
 
-### Workflow
+### Deep learning workflow
 <figure align="center">
 <image src="img/road_segmentation_flow.jpeg" alt="flow for the road segmentation">
 </figure>
@@ -75,25 +76,21 @@ python <path to the object detector>/scripts/make_predictions.py config/config_o
 python scripts/road_segmentation/final_metrics.py
 ```
 
-## Other uses
+## Additional uses
 
 ### Preprocessing
-Here, the included WTMS link points the [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html) product. Better results are achieved when using the [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) product and processing it to a WMTS-type service as described in the documentation. <br>
-We obtained the images on a hard disk and transferred them to our S3 cloud using the script `RS_images_to_S3.py`.
-Then, using the script `tif2cog.py`, the images were transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files and TiTiler was used to access them as tiles in a WMTS service.
+The included WTMS link points the [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html) product. Better results are achieved when using the [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) product and processing it to a WMTS-type service as described in the documentation. <br>
+The images were:
+- transferred on a S3 cloud with the script `RS_images_to_S3.py`,
+- transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files with the script `tif2cog.py`.
+TiTiler was used to access them as tiles in a WMTS service.
 
 ```
-python scripts/preprocessing/RS_images_to_S3 config/config_preprocessing.yaml
+python scripts/preprocessing/RS_images_to_S3.py config/config_preprocessing.yaml
 python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 ```
 
 ### Machine-learning procedure
-
-<figure align="center">
-<image src="img/proj_roadsurf_flow.jpeg" alt="Diagram of the methodology" style="width:60%;">
-<figcaption align="center">Simplified diagram of the methodology for this project.</figcaption> 
-</figure>
-
 Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described here below.
 
 <figure align="center">
