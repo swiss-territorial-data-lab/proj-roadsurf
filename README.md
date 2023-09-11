@@ -27,15 +27,15 @@ The initial data are described in the dedicated `data` folder.
 ## Installation
 The procedure was tested on Ubuntu 20.04. <br>
 
-In order to run the project, you will need :
+The following elements are needed :
 - this repository,
-- the repository of the [object detector](https://github.com/swiss-territorial-data-lab/object-detector),
+- the [object detector repository](https://github.com/swiss-territorial-data-lab/object-detector),
 - a CUDA-capable system.
 
 To prepare the environment:
 
 1. create a Python 3.8 environment
-2. if you do not have GDAL installed, run the following command:
+2. if GDAL is not installed yet, run the following command:
 ```bash 
 sudo apt-get install -y python3-gdal gdal-bin libgdal-dev gcc g++ python3.8-dev
 ```
@@ -61,13 +61,16 @@ pip install -r requirements.txt
 ```
 
 ### Deep learning workflow
+
+The roads were transformed from line vector to polygon labels. Then, there were classified with the STDL's object detector and the result was assessed, as illustrated on the figure below.
+
 <figure align="center">
 <image src="img/road_segmentation_flow.jpeg" alt="flow for the road segmentation">
 </figure>
 
-The scripts can be configured through the file `config_od.yaml`. <br>
+The scripts can be configured through the file `config_od.yaml` and `detectron2_config_3bands.yaml`. <br>
 
-The method can be run with the following commands:
+The deep learning algorithm can be run with the following commands:
 ```bash
 python scripts/road_segmentation/prepare_data_od.py config/config_od.yaml
 python <path to the object detector>/scripts/generate_tilesets.py config/config_od.yaml
@@ -85,17 +88,22 @@ The images were:
 - transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files with the script `tif2cog.py`.
 TiTiler was used to access them as tiles in a WMTS service.
 
+The scripts can be configured through the file `config_preprocessing.yaml`. <br>
+
 ```
 python scripts/preprocessing/RS_images_to_S3.py config/config_preprocessing.yaml
 python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 ```
 
 ### Machine-learning procedure
+
 Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described here below.
 
 <figure align="center">
 <image src="img/statistical_flow.jpeg" alt="flow for the research of a statistical differences">
 </figure>
+
+The scripts can be configured through the file `config_stats.yaml`. <br>
 
 ```
 python scripts/statistical_analysis/prepare_data.py config/config_stats.yaml
