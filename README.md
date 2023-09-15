@@ -19,13 +19,13 @@ The aim of this project is to classify the roads of Switzerland according to whe
 Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.XXX for the validation area and 0.557 for the inference-only area. The algorithm  has an approach based on deep learning using the STDL's object detector.<br>
 A procedure based on machine learning was tested, but not completed as no significant statistical difference could be found between the classes.
 
-The full documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
+The detailed documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
 
-The initial data are described in the dedicated `data` folder.
+The input data are described in the dedicated `data` folder.
 
 
 ## Installation
-The procedure was tested on Ubuntu 20.04. <br>
+The procedure was performed on Ubuntu 20.04. <br>
 
 The following elements are needed :
 - this repository,
@@ -34,7 +34,7 @@ The following elements are needed :
 
 To prepare the environment:
 
-1. create a Python 3.8 environment
+1. create a Python 3.8 virtual environment
 2. if GDAL is not installed yet, run the following command:
 ```bash 
 sudo apt-get install -y python3-gdal gdal-bin libgdal-dev gcc g++ python3.8-dev
@@ -50,8 +50,8 @@ pip install -r requirements.txt
 ```
 .
 ├── config                      # Configuration files for the scripts and detectron2
-├── data                        # Initial data
-├── img                         # Image folder for the readme
+├── data                        # Input data
+├── img                         # Image folder of the readme
 ├── scripts
 |   ├── functions               # Functions files
 |   ├── preprocessing           # Scripts used in preprocessing
