@@ -21,7 +21,7 @@ tic = time.time()
 logger.info('Starting...')
 
 logger.info(f"Using config.yaml as config file.")
-with open('config/config_od.yaml') as fp:
+with open('config/config_obj_detector.yaml') as fp:
         cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
 
 

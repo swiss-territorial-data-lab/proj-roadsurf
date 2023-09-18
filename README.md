@@ -16,7 +16,7 @@
 ## Introduction
 
 The aim of this project is to classify the roads of Switzerland according to whether they have an artificial or natural surface. The final objective was to integrate this information into [swissTLM3D](https://www.swisstopo.admin.ch/fr/geodata/landscape/tlm3d.html), the 3D topographic model of Switzerland. <br>
-Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.775 for the validation area and 0.548 for the inference-only area. The algorithm  has an approach based on deep learning using the STDL's object detector.<br>
+Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.775 for the validation area and 0.548 for the inference-only area. The algorithm has an approach based on deep learning using the STDL's object detector.<br>
 A procedure based on machine learning was tested, but not completed as no significant statistical difference could be found between the classes.
 
 The detailed documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
@@ -62,27 +62,27 @@ pip install -r requirements.txt
 
 ### Deep learning workflow
 
-The roads were transformed from line vector to polygon labels. Then, there were classified with the STDL's object detector and the result was assessed, as illustrated on the figure below.
+The road, initially provided as vector lines, were transformed to polygon labels to approximate the real extent of roads in the images. Then, a model was trained to classify roads in 2 classes (natural or artificial) with the STDL's object detector. Finally, the results were assessed. The entire procedure is illustrated in the diagram below.
 
 <figure align="center">
 <image src="img/road_segmentation_flow.jpeg" alt="flow for the road segmentation">
 </figure>
 
-The scripts can be configured through the file `config_od.yaml` and `detectron2_config_3bands.yaml`. <br>
+The scripts can be configured through the file `config_obj_detec.yaml` and `detectron2_config_3bands.yaml`. <br>
 
 The deep learning algorithm can be run with the following commands:
 ```bash
-python scripts/road_segmentation/prepare_data_od.py config/config_od.yaml
-python <path to the object detector>/scripts/generate_tilesets.py config/config_od.yaml
-python <path to the object detector>/scripts/train_model.py config/config_od.yaml
-python <path to the object detector>/scripts/make_predictions.py config/config_od.yaml
+python scripts/road_segmentation/prepare_data_obj_detec.py config/config_obj_detec.yaml
+python <path to the object detector>/scripts/generate_tilesets.py config/config_obj_detec.yaml
+python <path to the object detector>/scripts/train_model.py config/config_obj_detec.yaml
+python <path to the object detector>/scripts/make_predictions.py config/config_obj_detec.yaml
 python scripts/road_segmentation/final_metrics.py
 ```
 
-## Additional uses
+## Additional applications
 
-### Preprocessing
-The included WTMS link points the [SWISSIMAGE 10 cm](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html) product. Better results are achieved when using the [SWISSIMAGE RS](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html) product and processing it to a WMTS-type service as described in the documentation. <br>
+### Image processing
+The WTMS link in the file `config_obj_detec.yaml` refers to the [SWISSIMAGE 10 cm product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html). However, better results are achieved using the [SWISSIMAGE RS product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html). These data are available on request from swisstopo and require specific data processings and an infrastructure to obtain tiles managed by a WMTS-like service as described in the documentation.<br>
 The images were:
 - transferred on a S3 cloud with the script `RS_images_to_S3.py`,
 - transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files with the script `tif2cog.py`.
@@ -107,7 +107,7 @@ The scripts can be configured through the file `config_stats.yaml`. <br>
 
 ```
 python scripts/statistical_analysis/prepare_data.py config/config_stats.yaml
-python scripts/road_segmentation/prepare_data_od.py config/config_stats.yaml
+python scripts/road_segmentation/prepare_data_obj_detec.py config/config_stats.yaml
 python <path to the object detector>/scripts/generate_tilesets.py config/config_stats.yaml
 python scripts/statistical_analysis/statistical_analysis.py config/config_stats.yaml
 ```
