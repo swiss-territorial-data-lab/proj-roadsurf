@@ -103,6 +103,7 @@ final_metrics.py:
   initial_folder: data
   processed_folder: outputs
   final_folder: outputs/final
+  baseline: artificial
   inputs:
     road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson

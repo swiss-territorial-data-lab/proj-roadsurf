@@ -65,7 +65,7 @@ def get_metrics(comparison_df, CLASSES):
     return: a dataframe with the TP, FP, FN, precision and recall per class and a second one with the global metrics.
     '''
 
-    metrics_dict={'cover_class':[], 'TP':[], 'FP':[], 'FN':[], 'Pk':[], 'Rk':[], 'count':[]}
+    metrics_dict={'cover_class':[], 'TP':[], 'FP':[], 'FN':[], 'Pk':[], 'Rk':[], 'f1k': [], 'count':[]}
     for cover_type in CLASSES:
         metrics_dict['cover_class'].append(cover_type)
         tp=comparison_df[(comparison_df['tag']=='TP') &
@@ -82,23 +82,26 @@ def get_metrics(comparison_df, CLASSES):
         metrics_dict['FN'].append(fn+fn_class)
 
         if tp==0:
-            pk=0
-            rk=0
+            pk = 0
+            rk = 0
+            f1k = 0
         else:
-            pk=tp/(tp+fp)
-            rk=tp/(tp+fn+fn_class)
+            pk = tp/(tp+fp)
+            rk = tp/(tp+fn+fn_class)
+            f1k = 2*pk*rk/(pk+rk)
 
         metrics_dict['Pk'].append(pk)
         metrics_dict['Rk'].append(rk)
+        metrics_dict['f1k'].append(f1k)
 
         metrics_dict['count'].append(comparison_df[comparison_df['CATEGORY']==cover_type].shape[0])
 
     metrics_df=pd.DataFrame(metrics_dict)
 
-    total_roads_by_type=metrics_df['count'].sum()
+    total_by_type=metrics_df['count'].sum()
 
-    weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_roads_by_type
-    weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_roads_by_type
+    weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_by_type
+    weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_by_type
 
     if weighted_precision==0 and weighted_recall==0:
         weighted_f1_score=0
@@ -335,8 +338,7 @@ for dst in ['trn', 'tst']:
 
 not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
 ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
-not_oth_comparison_df=determine_class.determine_detected_class(
-        not_oth_predictions, ground_truth_from_gt, best_threshold)
+not_oth_comparison_df=determine_class.determine_detected_class(not_oth_predictions, ground_truth_from_gt, best_threshold)
 
 not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
