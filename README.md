@@ -16,7 +16,7 @@
 ## Introduction
 
 The aim of this project is to classify the roads of Switzerland according to whether they have an artificial or natural surface. The final objective was to integrate this information into [swissTLM3D](https://www.swisstopo.admin.ch/fr/geodata/landscape/tlm3d.html), the 3D topographic model of Switzerland. <br>
-Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.XXX for the validation area and 0.557 for the inference-only area. The algorithm  has an approach based on deep learning using the STDL's object detector.<br>
+Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.775 for the validation area and 0.548 for the inference-only area. The algorithm  has an approach based on deep learning using the STDL's object detector.<br>
 A procedure based on machine learning was tested, but not completed as no significant statistical difference could be found between the classes.
 
 The detailed documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
