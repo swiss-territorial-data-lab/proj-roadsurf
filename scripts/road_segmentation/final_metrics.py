@@ -27,26 +27,28 @@ with open('config/config_od.yaml') as fp:
 
 # Define constants ------------------------------------
 
-INITIAL_FOLDER=cfg['initial_folder']
-PROCESSED_FOLDER=cfg['processed_folder']
+INITIAL_FOLDER = cfg['initial_folder']
+PROCESSED_FOLDER = cfg['processed_folder']
 FINAL_FOLDER=cfg['final_folder']
 
-ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param'])
+BASELINE = cfg['baseline']
 
-GROUND_TRUTH=os.path.join(PROCESSED_FOLDER, cfg['inputs']['ground_truth'])
+ROAD_PARAMETERS = os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param'])
+
+GROUND_TRUTH = os.path.join(PROCESSED_FOLDER, cfg['inputs']['ground_truth'])
 if 'other_labels' in cfg['inputs'].keys():
-    OTHER_LABELS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['other_labels'])
+    OTHER_LABELS = os.path.join(PROCESSED_FOLDER, cfg['inputs']['other_labels'])
 else:
-    OTHER_LABELS=None
+    OTHER_LABELS = None
 
-PREDICTIONS=cfg['inputs']['to_evaluate']
-TILES=os.path.join(PROCESSED_FOLDER, cfg['inputs']['tiles'])
-LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['inputs']['labels_id'])
+PREDICTIONS = cfg['inputs']['to_evaluate']
+TILES = os.path.join(PROCESSED_FOLDER, cfg['inputs']['tiles'])
+LABELS_ID = os.path.join(PROCESSED_FOLDER, cfg['inputs']['labels_id'])
 
-QUARRIES=os.path.join(INITIAL_FOLDER, cfg['inputs']['quarries'])
+QUARRIES = os.path.join(INITIAL_FOLDER, cfg['inputs']['quarries'])
 
 
-shp_gpkg_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
+shp_gpkg_folder = fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'shp_gpkg'))
 
 written_files=[]
 
@@ -503,23 +505,35 @@ else:
 
 print('\n')
 
-if True:
+if 'artificial' in BASELINE:
     logger.info('Baseline: If all roads were classified as artificial...')
-    comp_df_all_art=best_comparison_df.copy()
-    comp_df_all_art['cover_type']='artificial'
-    comp_df_all_art.drop(columns=['tag'], inplace=True)
-    comp_df_all_art['tag']=comp_df_all_art.apply(lambda row: get_tag(row), axis=1)
+    comp_df_baseline=best_comparison_df.copy()
+    comp_df_baseline['cover_type']='artificial'
 
-    class_metrics_all_art, global_metrics_all_art=get_metrics(comp_df_all_art, CLASSES)
-    show_metrics(class_metrics_all_art, global_metrics_all_art)
+elif BASELINE == 'random':
+	np.random.seed(0)
+	
+	logger.info('Baseline: if the roads were classified randomly...')
+	comp_df_baseline = best_comparison_df.copy()
+	comp_df_baseline['cover_type'] = ['artificial' if i == 1 else 'natural' for i in np.random.randint(1, 3, size=comp_df_baseline.shape[0])]
 
-    class_metrics_all_art['dataset']='baseline'
-    by_class_metrics=pd.concat([by_class_metrics, class_metrics_all_art], ignore_index=True)
+else:
+    logger.critical('No corresponding baseline.')
+    sys.exit(1)
 
-    global_metrics_all_art['dataset']='baseline'
-    global_metrics=pd.concat([global_metrics, global_metrics_all_art], ignore_index=True)
+comp_df_baseline.drop(columns=['tag'], inplace=True)
+comp_df_baseline['tag']=comp_df_baseline.apply(lambda row: get_tag(row), axis=1)
 
-    print('\n')
+class_metrics_all_art, global_metrics_all_art=get_metrics(comp_df_baseline, CLASSES)
+show_metrics(class_metrics_all_art, global_metrics_all_art)
+
+class_metrics_all_art['dataset']='baseline'
+by_class_metrics=pd.concat([by_class_metrics, class_metrics_all_art], ignore_index=True)
+
+global_metrics_all_art['dataset']='baseline'
+global_metrics=pd.concat([global_metrics, global_metrics_all_art], ignore_index=True)
+
+print('\n')
 
 table_folder=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
 
