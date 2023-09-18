@@ -178,7 +178,6 @@ predictions.drop(columns=['pred_class'], inplace=True)
 
 tiles=gpd.read_file(TILES)
 considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())]
-validation_tiles=tiles[tiles['dataset']=='val']
 
 quarries=gpd.read_file(QUARRIES)
 
@@ -211,8 +210,6 @@ logger.info('Limiting the labels to the visible area of labels and predictions..
 
 visible_ground_truth=determine_class.clip_labels(filtered_ground_truth, considered_tiles[['title', 'id', 'geometry']])
 
-del considered_tiles
-
 logger.info('Getting the intersecting area between predictions and labels...')
 
 visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
@@ -227,6 +224,7 @@ del visible_ground_truth_2056, ground_truth, predictions_2056
 
 logger.info('Determining the best metrics for the predictions based on the validation dataset...')
 val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val']
+validation_tiles=considered_tiles[considered_tiles['dataset']=='val']
 validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)]
 
 all_global_metrics=pd.DataFrame()
@@ -278,9 +276,9 @@ logger.info("Metrics for the validation dataset:")
 show_metrics(best_val_by_class_metrics, best_val_global_metrics)
 
 by_class_metrics=best_val_by_class_metrics.copy()
-by_class_metrics['dataset']='validation'
+by_class_metrics['dataset']='val'
 global_metrics=best_val_global_metrics.copy()
-global_metrics['dataset']='validation'
+global_metrics['dataset']='val'
 
 print('\n')
 logger.info(f"For a threshold of {best_threshold}...")
@@ -312,6 +310,68 @@ filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
 best_comparison_df.to_file(filepath)
 written_files.append(filepath)
 
+print('\n')
+logger.info('Metrics based on the trn, tst, val datasets...')
+
+for dst in ['trn', 'tst']:
+    dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst]
+    dst_tiles = considered_tiles[considered_tiles['dataset']==dst]
+    dst_ground_truth = filtered_ground_truth[filtered_ground_truth.geometry.intersects(dst_tiles.unary_union)]
+
+    dst_comparison_df = determine_class.determine_detected_class(dst_predictions, dst_ground_truth, best_threshold)
+    dst_comparison_df['tag'] = dst_comparison_df.apply(lambda row: get_tag(row), axis=1)
+    dst_metrics_by_class, dst_global_metrics = get_metrics(dst_comparison_df, CLASSES)
+
+    dst_metrics_by_class['dataset'] = dst
+    dst_metrics_by_class['threshold'] = best_threshold
+    by_class_metrics = pd.concat([by_class_metrics, dst_metrics_by_class], ignore_index=True)
+
+    dst_global_metrics['dataset'] = dst
+    dst_global_metrics['threshold'] = best_threshold
+    global_metrics = pd.concat([global_metrics, dst_global_metrics], ignore_index=True)
+
+
+not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
+ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
+not_oth_comparison_df=determine_class.determine_detected_class(
+        not_oth_predictions, ground_truth_from_gt, best_threshold)
+
+not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+not_oth_metrics_by_class, not_oth_global_metrics = get_metrics(not_oth_comparison_df, CLASSES)
+
+show_metrics(not_oth_metrics_by_class, not_oth_global_metrics)
+
+not_oth_metrics_by_class['dataset']='training zone (trn, val, tst)'
+not_oth_metrics_by_class['threshold']=best_threshold
+by_class_metrics=pd.concat([by_class_metrics, not_oth_metrics_by_class], ignore_index=True)
+
+not_oth_global_metrics['dataset']='training zone (trn, val, tst)'
+not_oth_global_metrics['threshold']=best_threshold
+global_metrics=pd.concat([global_metrics, not_oth_global_metrics], ignore_index=True)
+
+if 'oth' in PREDICTIONS.keys():
+    print('\n')
+    logger.info('Metrics based on the predictions of the oth dataset...')
+
+    oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
+    ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth']
+    oth_comparison_df=determine_class.determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
+
+    oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+    oth_metrics_by_class, oth_global_metrics = get_metrics(oth_comparison_df,  CLASSES)
+
+    show_metrics(oth_metrics_by_class, oth_global_metrics)
+
+    oth_metrics_by_class['dataset']='inference-only zone'
+    oth_metrics_by_class['threshold']=best_threshold
+    by_class_metrics=pd.concat([by_class_metrics, oth_metrics_by_class], ignore_index=True)
+
+    oth_global_metrics['dataset']='inference-only zone'
+    oth_global_metrics['threshold']=best_threshold
+    global_metrics=pd.concat([global_metrics, oth_global_metrics], ignore_index=True)
+
 if best_threshold != 0:
     print('\n')
     logger.info(f"If we were to keep all the predictions, the metrics would be...")
@@ -334,50 +394,6 @@ if best_threshold != 0:
     filepath=os.path.join(shp_gpkg_folder, 'types_from_all_detections.shp')
     all_preds_comparison_df.to_file(filepath)
     written_files.append(filepath)
-
-if 'oth' in PREDICTIONS.keys():
-    print('\n')
-    logger.info('Metrics based on the trn, tst, val datasets...')
-
-    not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
-    ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
-    not_oth_comparison_df=determine_class.determine_detected_class(
-            not_oth_predictions, ground_truth_from_gt, best_threshold)
-
-    not_oth_comparison_df['tag']=not_oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
-
-    not_oth_metrics_by_class, not_oth_global_metrics = get_metrics(not_oth_comparison_df, CLASSES)
-
-    show_metrics(not_oth_metrics_by_class, not_oth_global_metrics)
-
-    not_oth_metrics_by_class['dataset']='training zone (trn, val, tst)'
-    not_oth_metrics_by_class['threshold']=best_threshold
-    by_class_metrics=pd.concat([by_class_metrics, not_oth_metrics_by_class], ignore_index=True)
-
-    not_oth_global_metrics['dataset']='training zone (trn, val, tst)'
-    not_oth_global_metrics['threshold']=best_threshold
-    global_metrics=pd.concat([global_metrics, not_oth_global_metrics], ignore_index=True)
-
-    print('\n')
-    logger.info('Metrics based on the predictions of the oth dataset...')
-
-    oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
-    ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth']
-    oth_comparison_df=determine_class.determine_detected_class(oth_predictions, ground_truth_from_oth, best_threshold)
-
-    oth_comparison_df['tag']=oth_comparison_df.apply(lambda row: get_tag(row), axis=1)
-
-    oth_metrics_by_class, oth_global_metrics = get_metrics(oth_comparison_df,  CLASSES)
-
-    show_metrics(oth_metrics_by_class, oth_global_metrics)
-
-    oth_metrics_by_class['dataset']='inference-only zone'
-    oth_metrics_by_class['threshold']=best_threshold
-    by_class_metrics=pd.concat([by_class_metrics, oth_metrics_by_class], ignore_index=True)
-
-    oth_global_metrics['dataset']='inference-only zone'
-    oth_global_metrics['threshold']=best_threshold
-    global_metrics=pd.concat([global_metrics, oth_global_metrics], ignore_index=True)
 
 
 print('\n')
@@ -474,7 +490,7 @@ if best_filtered_threshold>0:
     logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
     show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
-    logger.info('%s %s', f'It would be wise to verify all the results with a difference on the indeces',
+    logger.info('%s %s', f'It would be wise to verify all the results with a difference on the indices',
                 f'lower than {best_filtered_threshold}.')
     
     filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
