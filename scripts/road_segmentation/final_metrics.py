@@ -100,6 +100,7 @@ def get_metrics(comparison_df, CLASSES):
 
     total_by_type=metrics_df['count'].sum()
 
+    # Weighted metrics
     weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_by_type
     weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_by_type
 
@@ -108,6 +109,7 @@ def get_metrics(comparison_df, CLASSES):
     else:
         weighted_f1_score=2*weighted_precision*weighted_recall/(weighted_precision + weighted_recall)
 
+    # Balanced metrics
     balanced_precision=metrics_df['Pk'].sum()/2
     balanced_recall=metrics_df['Rk'].sum()/2
 
@@ -158,6 +160,43 @@ def show_metrics(metrics_by_class, global_metrics):
         f"{round(global_metrics.Rb[0],2)}.")
 
 
+def from_preds_to_metrics(predictions, ground_truth, by_class_metrics, global_metrics, dataset_name, threshold=0, show=False):
+    """Determine te detected class based on the predictions, get the tag for each row, calculate the metrics and save them in a dataframe.
+
+    Args:
+        predictions (GeoDataFrame): predictions from the object detector
+        ground_truth (GeoDataFrame): labels of the ground truth
+        by_class_metrics (DataFrame): table of the by-class metrics
+        global_metrics (DataFrame): table of the global metrics
+        dataset_name (string): name of the dataset to identify it
+        threshold (int, optional): threshold on the confidence score of the predictions. Defaults to 0.
+        show (bool, optional): print the metrics. Defaults to False.
+
+    Returns:
+        GeoDataFrame, DataFrame, DataFrame: comparison of the predictions and the labels, by-class metrics and global metrics.
+    """
+
+    comparison_df=determine_class.determine_detected_class(predictions, ground_truth, threshold)
+
+    comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
+
+    dst_metrics_by_class, dst_global_metrics = get_metrics(comparison_df, CLASSES)
+
+    if show:
+        show_metrics(dst_metrics_by_class, dst_global_metrics)
+
+    dst_metrics_by_class['dataset'] = dataset_name
+    dst_metrics_by_class['threshold'] = threshold
+    by_class_metrics = pd.concat([by_class_metrics, dst_metrics_by_class], ignore_index=True)
+
+    dst_global_metrics['dataset'] = dataset_name
+    dst_global_metrics['threshold'] = threshold
+    global_metrics = pd.concat([global_metrics, dst_global_metrics], ignore_index=True)
+
+    return comparison_df, by_class_metrics, global_metrics
+
+
+
 # Importing files ----------------------------------
 logger.info('Importing files...')
 
@@ -188,29 +227,7 @@ quarries=gpd.read_file(QUARRIES)
 
 del dataset, tiles
 
-def from_preds_to_metrics(predictions, ground_truth, by_class_metrics, global_metrics, dataset_name, threshold=0, show=False):
-
-    comparison_df=determine_class.determine_detected_class(predictions, ground_truth, threshold)
-
-    comparison_df['tag']=comparison_df.apply(lambda row: get_tag(row), axis=1)
-
-    dst_metrics_by_class, dst_global_metrics = get_metrics(comparison_df, CLASSES)
-
-    if show:
-        show_metrics(dst_metrics_by_class, dst_global_metrics)
-
-    dst_metrics_by_class['dataset'] = dataset_name
-    dst_metrics_by_class['threshold'] = threshold
-    by_class_metrics = pd.concat([by_class_metrics, dst_metrics_by_class], ignore_index=True)
-
-    dst_global_metrics['dataset'] = dataset_name
-    dst_global_metrics['threshold'] = threshold
-    global_metrics = pd.concat([global_metrics, dst_global_metrics], ignore_index=True)
-
-    return comparison_df, by_class_metrics, global_metrics
-
-
-# Information treatment ----------------------------
+# Data processing ----------------------------
 
 logger.info('Possible classes:')
 for combination in labels_id.itertuples():
@@ -225,7 +242,7 @@ filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=
 
 filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_class.determine_category(row), axis=1)
 
-# Roads in quarries are always naturals
+
 logger.info('-- Roads in quarries are always naturals...')
 
 roads_in_quarries, filtered_ground_truth = determine_class.get_roads_in_quarries(quarries, filtered_ground_truth)
@@ -233,8 +250,8 @@ filepath=os.path.join(shp_gpkg_folder, 'roads_in_quarries.shp')
 roads_in_quarries.to_file(filepath)
 written_files.append(os.path.join(filepath))
 
-logger.info('Limiting the labels to the visible area of labels and predictions...')
 
+logger.info('Limiting the labels to the visible area of labels and predictions...')
 visible_ground_truth=determine_class.clip_labels(filtered_ground_truth, considered_tiles[['title', 'id', 'geometry']])
 
 logger.info('Getting the intersecting area between predictions and labels...')
@@ -308,6 +325,7 @@ global_metrics=best_val_global_metrics.copy()
 global_metrics['dataset']='val'
 
 print('\n')
+# Get the metrics for all the zones at once
 logger.info(f"For a threshold of {best_threshold}...")
 
 comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(predicted_roads_filtered, filtered_ground_truth, 
@@ -315,7 +333,7 @@ comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(predicte
                                                                     'all datasets', best_threshold, show = True)
 
 try:
-    assert(comparison_df.shape[0]==filtered_ground_truth.shape[0]), "There are too many or not enough labels in the final results"
+    assert(comparison_df.shape[0]==filtered_ground_truth.shape[0]), "There are too many or not enough labels in the final results."
 except Exception as e:
     logger.error(e)
     sys.exit(1)
@@ -370,17 +388,17 @@ if best_threshold != 0:
 
 
 print('\n')
-logger.info('-- Calculating the accuracy...')
+logger.info('Calculating the accuracy...')
 
 per_right_roads=best_comparison_df[best_comparison_df['CATEGORY']==best_comparison_df['cover_type']].shape[0]/best_comparison_df.shape[0]*100
 per_missing_roads=best_comparison_df[best_comparison_df['cover_type']=='undetected'].shape[0]/best_comparison_df.shape[0]*100
 per_undeter_roads=best_comparison_df[best_comparison_df['cover_type']=='undetermined'].shape[0]/best_comparison_df.shape[0]*100
 per_wrong_roads=round(100-per_right_roads-per_missing_roads-per_undeter_roads,2)
 
-logger.info(f"{round(per_right_roads,2)}% of the roads were found and have the correct road type.")
-logger.info(f"{round(per_undeter_roads,2)}% of the roads were detected, but have an undetermined road type.")
-logger.info(f"{round(per_missing_roads,2)}% of the roads were not found.")
-logger.info(f"{per_wrong_roads}% of the roads had the wrong road type.")
+logger.info(f"   {round(per_right_roads,2)}% of the roads were found and have the correct road type.")
+logger.info(f"   {round(per_undeter_roads,2)}% of the roads were detected, but have an undetermined road type.")
+logger.info(f"   {round(per_missing_roads,2)}% of the roads were not found.")
+logger.info(f"   {per_wrong_roads}% of the roads had the wrong road type.")
 
 for cover_type in ['undetected', 'undetermined']:
     print('\n')
@@ -394,8 +412,8 @@ for cover_type in ['undetected', 'undetermined']:
                                         (best_comparison_df['CATEGORY']=='natural')
                                         ].shape[0]/best_comparison_df.shape[0]*100,2)
 
-    logger.info(f"{per_type_roads_100}% of the roads are {cover_type} and have the artificial type")
-    logger.info(f"{per_type_roads_200}% of the roads are {cover_type} and have the natural type")
+    logger.info(f"   {per_type_roads_100}% of the roads are {cover_type} and have the artificial type")
+    logger.info(f"   {per_type_roads_200}% of the roads are {cover_type} and have the natural type")
 
 print('\n')
 
