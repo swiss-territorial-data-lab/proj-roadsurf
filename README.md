@@ -27,7 +27,7 @@ The input data are described in the dedicated `data` folder.
 ## Installation
 The procedure was performed on Ubuntu 20.04. <br>
 
-The following elements are needed :
+The following elements are needed:
 - this repository,
 - the [object detector repository](https://github.com/swiss-territorial-data-lab/object-detector),
 - a CUDA-capable system.
