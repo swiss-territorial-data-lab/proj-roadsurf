@@ -10,7 +10,7 @@
     - [Deep learning workflow](#deep-learning-workflow)
 - [Additional uses](#additional-uses)
     - [Preprocessing](#preprocessing)
-    - [Machine-learning procedure](#machine-learning-procedure)
+    - [Machine-learning workflow](#machine-learning-workflow)
 
 
 ## Introduction
@@ -95,7 +95,7 @@ python scripts/preprocessing/RS_images_to_S3.py config/config_preprocessing.yaml
 python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 ```
 
-### Machine-learning procedure
+### Machine-learning workflow
 
 Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described here below.
 
