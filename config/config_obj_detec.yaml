@@ -1,6 +1,6 @@
 # Procedure for automatic road detection with the object detector
 
-prepare_data_od.py:
+prepare_data_obj_detec.py:
   tasks:
     determine_roads_surfaces: true
     generate_tiles_info: true
