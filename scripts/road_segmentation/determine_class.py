@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
     ROADS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['roads'])
 
-    PREDICTIONS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['predictions'])
+    PREDICTIONS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['detections'])
     TILES=os.path.join(PROCESSED_FOLDER, cfg['inputs']['tiles'])
     LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['inputs']['labels_id'])
 
