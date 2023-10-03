@@ -114,7 +114,7 @@ if DETERMINE_ROAD_SURFACES:
                                 'HERKUNFT_M', 'REVISION_Q', 'WANDERWEGE', 'VERKEHRSBE', 
                                 'BEFAHRBARK', 'EROEFFNUNG', 'STUFE', 'RICHTUNGSG', 
                                 'KREISEL', 'EIGENTUEME', 'VERKEHRS_1', 'NAME',
-                                'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng'], inplace=True)
+                                'TLM_STRASS', 'STRASSENNA', 'SHAPE_Leng'], inplace=True, errors='ignore')
 
     logger.info('Determining the surface of the roads from lines...')
 
