@@ -4,18 +4,18 @@ import geopandas as gpd
 import pandas as pd
 import morecantile
 
-import os, sys
+import os
+import sys
 import argparse
 import yaml
-import logging, logging.config
+from loguru import logger
 from time import time
 from tqdm import tqdm
 
 sys.path.insert(1, 'scripts')
 import functions.fct_misc as fct_misc
 
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('root')
+logger = fct_misc.format_logger(logger)
 
 tic = time()
 logger.info('Starting...')
@@ -193,7 +193,7 @@ if DETERMINE_ROAD_SURFACES:
     non_forest_roads.drop(columns=['GDB-Code'],inplace=True)
     non_forest_roads.rename(columns={'Width':'road_width'}, inplace=True)
 
-    logger.info('Done determining the surface of the roads from lines!')
+    logger.success('Done determining the surface of the roads from lines!')
 
 
 if GENERATE_TILES_INFO or GENERATE_LABELS:
@@ -283,7 +283,7 @@ if GENERATE_TILES_INFO:
     logger.info(f'{tiles_in_restricted_aoi.shape[0]} tiles can be considered.')
     print()
 
-    logger.info('Done determining the tiles!')
+    logger.success('Done determining the tiles!')
 
 if GENERATE_LABELS:
     print()
@@ -369,7 +369,7 @@ if GENERATE_LABELS:
     logger.info(f'{OTH_labels_gdf.shape[0]} labels are saved as the other lables.')
     print()
 
-    logger.info('Done generating the labels for the object detector...')
+    logger.success('Done generating the labels for the object detector...')
 
 
 # Save results ------------------------------------------------------------------
@@ -405,4 +405,4 @@ for file in written_files:
     logger.info(file)
 
 toc = time()
-logger.info(f"Nothing left to be done: exiting. Elapsed time: {(toc-tic):.2f} seconds")
+logger.success(f"Nothing left to be done: exiting. Elapsed time: {(toc-tic):.2f} seconds")

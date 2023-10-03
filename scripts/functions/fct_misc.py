@@ -1,5 +1,6 @@
-import os, sys
-import logging, logging.config
+import os
+import sys
+from loguru import logger
 
 import geopandas as gpd
 import pandas as pd
@@ -10,8 +11,18 @@ from rasterio.mask import mask
 
 import numpy as np
 
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('XYZ')
+
+def format_logger(logger):
+    logger.remove()
+    logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} - {level} - {message}",
+            level="INFO", filter=lambda record: record["level"].no < 25)
+    logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} - <green>{level}</green> - {message}",
+            level="SUCCESS", filter=lambda record: record["level"].no < 30)
+    logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} - <yellow>{level}</yellow> - {message}",
+            level="WARNING", filter=lambda record: record["level"].no < 40)
+    logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} - <red>{level}</red> - <level>{message}</level>",
+            level="ERROR")
+    return logger
 
 def test_crs(crs1, crs2 = "EPSG:2056"):
     '''
@@ -189,3 +200,5 @@ def test_valid_geom(poly_gdf, correct=False, gdf_obj_name=None):
     logger.info(f"There aren't any invalid geometries{f' among the {gdf_obj_name}' if gdf_obj_name else ''}.")
 
     return poly_gdf
+
+logger = format_logger(logger)
