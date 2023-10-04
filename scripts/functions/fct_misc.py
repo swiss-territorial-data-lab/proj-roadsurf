@@ -8,6 +8,7 @@ from shapely.geometry import mapping
 
 import rasterio
 from rasterio.mask import mask
+from rasterio.errors import RasterioIOError
 
 import numpy as np
 
@@ -71,12 +72,17 @@ def get_pixel_values(geoms, tile, BANDS = range(1,4), pixel_values = pd.DataFram
     geoms = [mapping(geoms)]
 
     # extract the raster values values within the polygon 
-    with rasterio.open(tile) as src:
-        out_image, _ = mask(src, geoms, crop=True)
-        # out_image, _ = mask(src, geoms, crop=True, filled=False)
+    try:
+        with rasterio.open(tile) as src:
+            out_image, _ = mask(src, geoms, crop=True)
+            # out_image, _ = mask(src, geoms, crop=True, filled=False)
 
-        # no data values of the original raster
-        no_data=src.nodata
+            # no data values of the original raster
+            no_data=src.nodata
+
+    except RasterioIOError:
+        logger.error(f'The tile {tile} not found')
+        return pd.DataFrame()
     
     dico={}
     length_bands=[]

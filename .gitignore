@@ -1,6 +1,7 @@
 output*
 *.qgz
 **/*temp*
+.vscode/
 
 # Byte-compiled files
 **/__pycache__/
