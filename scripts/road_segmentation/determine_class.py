@@ -1,7 +1,8 @@
-import os, sys
-import yaml
-import logging, logging.config
+import os
+import sys
 import time
+import yaml
+from loguru import logger
 
 import pandas as pd
 import geopandas as gpd
@@ -11,17 +12,19 @@ from shapely.affinity import scale
 sys.path.insert(1, 'scripts')
 import functions.fct_misc as fct_misc
 
+logger = fct_misc.format_logger(logger)
+
 # Define functions ------------------------------------
 
 def get_corresponding_class(row, labels_id):
     'Get the class in words from the class ids out of the object detector with the method apply.'
 
-    if row['pred_class']==0:
-        return labels_id.loc[labels_id['id']==0, 'name'].item()
-    elif row['pred_class']==1:
+    if row['det_class']==0:
         return labels_id.loc[labels_id['id']==1, 'name'].item()
+    elif row['det_class']==1:
+        return labels_id.loc[labels_id['id']==2, 'name'].item()
     else:
-        logger.error(f"Unexpected class: {row['pred_class']}")
+        logger.error(f"Unexpected class: {row['det_class']}")
         sys.exit(1)
 
 def determine_category(row):
@@ -143,7 +146,7 @@ def determine_detected_class(predictions, roads, threshold=0):
 
         intersecting_predictions=valid_predictions[valid_predictions['OBJECTID']==road_id].copy()
 
-        groups=intersecting_predictions.groupby(['pred_class_name']).sum(numeric_only=True)
+        groups=intersecting_predictions.groupby(['det_class_name']).sum(numeric_only=True)
         if 'natural' in groups.index:
             if groups.loc['natural', 'weighted_score']==0:
                 natural_index=0
@@ -188,14 +191,11 @@ def determine_detected_class(predictions, roads, threshold=0):
 
 if __name__ == "__main__":
 
-    logging.config.fileConfig('logging.conf')
-    logger = logging.getLogger('root')
-
     tic = time.time()
     logger.info('Starting...')
 
-    logger.info(f"Using config.yaml as config file.")
-    with open('config/config_od.yaml') as fp:
+    logger.info(f"Using config_obj_detec.yaml as config file.")
+    with open('config/config_obj_detec.yaml') as fp:
             cfg = yaml.load(fp, Loader=yaml.FullLoader)['determine_class.py']
 
     # Define constants ------------------------------------
@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
     ROADS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['roads'])
 
-    PREDICTIONS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['predictions'])
+    PREDICTIONS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['detections'])
     TILES=os.path.join(PROCESSED_FOLDER, cfg['inputs']['tiles'])
     LABELS_ID=os.path.join(PROCESSED_FOLDER, cfg['inputs']['labels_id'])
 
@@ -234,8 +234,8 @@ if __name__ == "__main__":
     CLASSES=labels_id['name'].unique().tolist()
 
     predictions=gpd.read_file(PREDICTIONS)
-    predictions['pred_class_name']=predictions.apply(lambda row: get_corresponding_class(row, labels_id), axis=1)
-    predictions.drop(columns=['pred_class'], inplace=True)
+    predictions['det_class_name']=predictions.apply(lambda row: get_corresponding_class(row, labels_id), axis=1)
+    predictions.drop(columns=['det_class'], inplace=True)
 
     tiles=gpd.read_file(TILES)
 

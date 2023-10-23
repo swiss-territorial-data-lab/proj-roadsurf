@@ -1,9 +1,10 @@
 import argparse
-import yaml
-import os, sys
-import logging, logging.config
+import os
+import sys
 import time
+from loguru import logger
 from tqdm import tqdm
+from yaml import load, FullLoader
 
 import pandas as pd
 import geopandas as gpd
@@ -20,21 +21,6 @@ import functions.fct_misc as fct_misc
 import functions.fct_statistics as fs
 
 
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('root')
-
-tic = time.time()
-logger.info('Starting...')
-
-
-parser = argparse.ArgumentParser(description="This script calculates the stats for the different road classes.")
-parser.add_argument('config_file', type=str, help='a YAML config file')
-args = parser.parse_args()
-
-logger.info(f"Using {args.config_file} as config file.")
-
-with open(args.config_file) as fp:
-    cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 # Definitions of the functions
 
@@ -80,33 +66,50 @@ def im_of_hist_comp(band, roads, pixels_per_band, dirpath_f_images, prefix=''):
     return written_files_fct
 
 
-# Definition of the constants
-DEBUG_MODE=cfg['debug_mode']
-USE_ZONAL_STATS=cfg['use_zonal_stats']
-CORRECT_BALANCE=cfg['correct_balance']
-
-BANDS=range(1,5)
-MAX_MOE = cfg['param']['max_margin_of_interest']
-COUNT_THRESHOLD = cfg['param']['pixel_threshold']
-
-DO_KS_TEST = cfg['param']['do_ks_test']
-MAKE_BOXPLOTS = cfg['param']['make_boxplots']
-MAKE_PCA = cfg['param']['make_pca']
-
-PROCESSED=cfg['processed']
-PROCESSED_FOLDER=PROCESSED['processed_folder']
-FINAL_FOLDER=cfg['final_folder']
-
-## Inputs
-ROADS=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['roads'])
-TILES_DIR=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['images'])
-TILES_INFO=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['tiles'])
-
-written_files=[]
-dirpath_f_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
-dirpath_f_images=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
-
 if __name__ == "__main__":
+
+    logger = fct_misc.format_logger(logger)
+
+    tic = time.time()
+    logger.info('Starting...')
+
+
+    parser = argparse.ArgumentParser(description="This script calculates the stats for the different road classes.")
+    parser.add_argument('config_file', type=str, help='a YAML config file')
+    args = parser.parse_args()
+
+    logger.info(f"Using {args.config_file} as config file.")
+
+    with open(args.config_file) as fp:
+        cfg = load(fp, Loader=FullLoader)[os.path.basename(__file__)]
+
+
+    # Definition of the constants
+    DEBUG_MODE=cfg['debug_mode']
+    USE_ZONAL_STATS=cfg['use_zonal_stats']
+    CORRECT_BALANCE=cfg['correct_balance']
+
+    BANDS=range(1,5)
+    MAX_MOE = cfg['param']['max_margin_of_interest']
+    COUNT_THRESHOLD = cfg['param']['pixel_threshold']
+
+    DO_KS_TEST = cfg['param']['do_ks_test']
+    MAKE_BOXPLOTS = cfg['param']['make_boxplots']
+    MAKE_PCA = cfg['param']['make_pca']
+
+    PROCESSED=cfg['processed']
+    PROCESSED_FOLDER=PROCESSED['processed_folder']
+    FINAL_FOLDER=cfg['final_folder']
+
+    ## Inputs
+    ROADS=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['roads'])
+    TILES_DIR=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['images'])
+    TILES_INFO=os.path.join(PROCESSED_FOLDER, PROCESSED['input_files']['tiles'])
+
+    written_files=[]
+    dirpath_f_tables=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'tables'))
+    dirpath_f_images=fct_misc.ensure_dir_exists(os.path.join(FINAL_FOLDER, 'images'))
+
 
     # Importation of the files
     roads=gpd.read_file(ROADS)

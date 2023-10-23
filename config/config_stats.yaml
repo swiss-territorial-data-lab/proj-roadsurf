@@ -14,7 +14,7 @@ prepare_data.py:
       aoi: AOI/aoi.shp
   output_folder: outputs
 
-prepare_data_od.py:
+prepare_data_obj_detec.py:
   tasks:
     determine_roads_surfaces: false
     generate_tiles_info: true
@@ -30,14 +30,15 @@ prepare_data_od.py:
   zoom_level: 18  # keep between 17 and 20  
 
 generate_tilesets.py:
-  debug_mode: false
+  working_directory: outputs
+  debug_mode: true
   datasets:
-    aoi_tiles_geojson: outputs/json_inputs/tiles_aoi.geojson
+    aoi_tiles_geojson: json_inputs/tiles_aoi.geojson
     orthophotos_web_service:
       type: XYZ
       url: https://titiler.stdl.ch/mosaicjson/tiles/{z}/{x}/{y}.tif?url=/data/proj-roadsurf/mosaic-z17-z20.json&bidx=2&bidx=3&bidx=4&bidx=1&nodata=0&pixel_selection=lowest
       srs: "EPSG:3857"
-  output_folder: outputs/obj_detector
+  output_folder: obj_detector
   tile_size: 256 # per side, in pixels
   overwrite: False
   n_jobs: 10

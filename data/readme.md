@@ -1,6 +1,6 @@
 # Data
 The data corresponds to the year 2018. <br>
-All the initial georeferenced data is available in the crs EPSG:2053. <br>
+All the initial georeferenced data is available in the crs EPSG:2056. <br>
 All the initial georeferenced objects are represented as polygons, except for the roads which are represented as lines. <br>
 
 ## Area of interest

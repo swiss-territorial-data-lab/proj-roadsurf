@@ -1,9 +1,10 @@
-import os, sys
+import os
+import sys
 import argparse
-import yaml
-import logging, logging.config
 import time
+from loguru import logger
 from tqdm import tqdm
+from yaml import load, FullLoader
 
 import geopandas as gpd
 import pandas as pd
@@ -11,9 +12,7 @@ import pandas as pd
 sys.path.insert(1, 'scripts')
 import functions.fct_misc as fct_misc
 
-
-logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('root')
+logger = fct_misc.format_logger(logger)
 
 tic = time.time()
 logger.info('Starting...')
@@ -26,7 +25,7 @@ args = parser.parse_args()
 logger.info(f"Using {args.config_file} as config file.")
 
 with open(args.config_file) as fp:
-    cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
+    cfg = load(fp, Loader=FullLoader)[os.path.basename(__file__)]
 
 
 # Task to do
