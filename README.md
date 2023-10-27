@@ -16,7 +16,7 @@
 ## Introduction
 
 The aim of this project is to classify the roads of Switzerland according to whether they have an artificial or natural surface. The final objective was to integrate this information into [swissTLM3D](https://www.swisstopo.admin.ch/fr/geodata/landscape/tlm3d.html), the 3D topographic model of Switzerland. <br>
-Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.775 for the validation area and 0.548 for the inference-only area. The algorithm has an approach based on deep learning using the STDL's object detector.<br>
+Using a F1 score with the same importance to both classes (artificial and natural), the final F1 score is 0.775 for the validation area and 0.548 for the inference-only area. The algorithm has an approach based on deep learning using the [STDL's object detector](https://github.com/swiss-territorial-data-lab/object-detector).<br>
 A procedure based on machine learning was tested, but not completed as no significant statistical difference could be found between the classes.
 
 The detailed documentation can be found on the [STDL technical website](https://tech.stdl.ch/PROJ-ROADSURF/).
@@ -53,11 +53,11 @@ pip install -r requirements.txt
 ├── data                        # Input data
 ├── img                         # Image folder of the readme
 ├── scripts
-|   ├── functions               # Functions files
-|   ├── preprocessing           # Scripts used in preprocessing
-|   ├── road_segmentation       # Scripts used in the procedure based on deep learning and using the STDL's object detector
-|   ├── sandbox                 # Scripts that were not implemented in the final procedure
-|   ├── statistical_analysis    # Scripts used in the procedure based on machine learning
+    ├── functions               # Functions files
+    ├── preprocessing           # Scripts used in preprocessing
+    ├── road_segmentation       # Scripts used in the procedure based on deep learning and using the STDL's object detector
+    ├── sandbox                 # Scripts that were not implemented in the final procedure
+    └── statistical_analysis    # Scripts used in the procedure based on machine learning
 ```
 
 ### Deep learning workflow
@@ -97,7 +97,7 @@ python scripts/preprocessing/tif2cog.py config/config_preprocessing.yaml
 
 ### Machine-learning workflow
 
-Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described here below.
+Supervised classification was tested before road segmentation and classification. However, it was given up as we could not find significant statistical differences between the classes. The procedure is described below.
 
 <figure align="center">
 <image src="img/statistical_flow.jpeg" alt="flow for the research of a statistical differences">
