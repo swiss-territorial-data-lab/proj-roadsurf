@@ -82,7 +82,7 @@ python scripts/road_segmentation/final_metrics.py
 ## Additional applications
 
 ### Image processing
-The WTMS link in the file `config_obj_detec.yaml` refers to the [SWISSIMAGE 10 cm product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html). However, better results are achieved using the [SWISSIMAGE RS product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html). These data are available on request from swisstopo and require specific data processings and an infrastructure to obtain tiles managed by a WMTS-like service as described in the documentation.<br>
+The WTMS link in the file `config_obj_detec.yaml` refers to the [SWISSIMAGE 10 cm product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage10.html). However, better results are achieved using the [SWISSIMAGE RS product](https://www.swisstopo.admin.ch/en/geodata/images/ortho/swissimage-rs.html). These data are available on request from swisstopo and require specific data processing and an infrastructure to obtain tiles managed by a WMTS-like service as described in the documentation.<br>
 The images were:
 - transferred on a S3 cloud with the script `RS_images_to_S3.py`,
 - transformed from 16-bit TIFF to 8-bit Cloud Optimized GeoTiff files with the script `tif2cog.py`.
