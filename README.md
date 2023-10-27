@@ -52,7 +52,7 @@ pip install -r requirements.txt
 ├── config                      # Configuration files for the scripts and detectron2
 ├── data                        # Input data
 ├── img                         # Image folder of the readme
-├── scripts
+└── scripts
     ├── functions               # Functions files
     ├── preprocessing           # Scripts used in preprocessing
     ├── road_segmentation       # Scripts used in the procedure based on deep learning and using the STDL's object detector
