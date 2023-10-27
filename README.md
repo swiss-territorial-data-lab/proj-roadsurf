@@ -75,7 +75,7 @@ The deep learning algorithm can be run with the following commands:
 python scripts/road_segmentation/prepare_data_obj_detec.py config/config_obj_detec.yaml
 python <path to the object detector>/scripts/generate_tilesets.py config/config_obj_detec.yaml
 python <path to the object detector>/scripts/train_model.py config/config_obj_detec.yaml
-python <path to the object detector>/scripts/make_predictions.py config/config_obj_detec.yaml
+python <path to the object detector>/scripts/make_detections.py config/config_obj_detec.yaml
 python scripts/road_segmentation/final_metrics.py
 ```
 
