@@ -115,13 +115,17 @@ def show_metrics(metrics_by_class, global_metrics):
     '''
 
     for metric in metrics_by_class.itertuples():
-        logger.info(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
-            f"and a recall of {round(metric.Rk, 2)}")
+        logger.info("{} {}".format(
+            f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}",
+            f"and a recall of {round(metric.Rk, 2)}."
+        ))
 
-    logger.info(f"The final f1-score is {round(global_metrics.f1b[0], 2)}", 
+    logger.info("{} {} {}".format(
+        f"The final f1-score is {round(global_metrics.f1b[0], 2)}", 
         f"with a precision of {round(global_metrics.Pb[0],2)} and a recall of",
-        f"{round(global_metrics.Rb[0],2)}.")
-
+        f"{round(global_metrics.Rb[0],2)}."
+    ))
+        
 
 def from_preds_to_metrics(predictions, ground_truth, by_class_metrics, global_metrics, dataset_name, threshold=0, show=False):
     """Determine te detected class based on the predictions, get the tag for each row, calculate the metrics and save them in a dataframe.
@@ -221,7 +225,7 @@ if __name__ == "__main__":
     predictions.drop(columns=['det_class'], inplace=True)
 
     tiles=gpd.read_file(TILES)
-    considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())]
+    considered_tiles=tiles[tiles['dataset'].isin(PREDICTIONS.keys())].copy()
 
     quarries=gpd.read_file(QUARRIES)
 
@@ -238,7 +242,7 @@ if __name__ == "__main__":
     filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
     filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
                                             how='inner',left_on='OBJEKTART',right_on='GDB-Code')
-    filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997]
+    filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997].copy()
 
     filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_class.determine_category(row), axis=1)
 
@@ -262,14 +266,14 @@ if __name__ == "__main__":
     predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
     predicted_roads_filtered.drop(columns=['OBJEKTART', 'KUNSTBAUTE', 'BELAGSART', 'road_width', 'road_len',
                                         'CATEGORY', 'SUPERCATEGORY', 'gt_type', 'GDB-Code', 'Width',
-                                            'title', 'tile_id', 'area_label', 'crs', 'dataset', 'joined_area'])
+                                            'title', 'tile_id', 'area_label', 'crs', 'joined_area'], inplace=True, errors='ignore')
 
     del visible_ground_truth_2056, ground_truth, predictions_2056
 
     logger.info('Determining the best metrics for the predictions based on the validation dataset...')
-    val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val']
-    validation_tiles=considered_tiles[considered_tiles['dataset']=='val']
-    validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)]
+    val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val'].copy()
+    validation_tiles=considered_tiles[considered_tiles['dataset']=='val'].copy()
+    validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)].copy()
 
     all_global_metrics=pd.DataFrame()
     all_metrics_by_class=pd.DataFrame()
@@ -348,17 +352,17 @@ if __name__ == "__main__":
     logger.info('Metrics based on the trn, tst, val datasets...')
 
     for dst in ['trn', 'tst']:
-        dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst]
-        dst_tiles = considered_tiles[considered_tiles['dataset']==dst]
-        dst_ground_truth = filtered_ground_truth[filtered_ground_truth.geometry.intersects(dst_tiles.unary_union)]
+        dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst].copy()
+        dst_tiles = considered_tiles[considered_tiles['dataset']==dst].copy()
+        dst_ground_truth = filtered_ground_truth[filtered_ground_truth.geometry.intersects(dst_tiles.unary_union)].copy()
 
         dst_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(dst_predictions, dst_ground_truth,
                                                                                 by_class_metrics, global_metrics,
                                                                                 dst, best_threshold)
 
 
-    not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])]
-    ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt']
+    not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])].copy()
+    ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt'].copy()
 
     not_oth_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(not_oth_predictions, ground_truth_from_gt,
                                                                                 by_class_metrics, global_metrics,
@@ -368,8 +372,8 @@ if __name__ == "__main__":
         print('\n')
         logger.info('Metrics based on the predictions of the oth dataset...')
 
-        oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth']
-        ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth']
+        oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='oth'].copy()
+        ground_truth_from_oth=filtered_ground_truth[filtered_ground_truth['gt_type']=='oth'].copy()
 
         oth_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(oth_predictions, ground_truth_from_oth,
                                                                                 by_class_metrics, global_metrics,
@@ -390,10 +394,10 @@ if __name__ == "__main__":
     print('\n')
     logger.info('Calculating the accuracy...')
 
-    per_right_roads=best_comparison_df[best_comparison_df['CATEGORY']==best_comparison_df['cover_type']].shape[0]/best_comparison_df.shape[0]*100
-    per_missing_roads=best_comparison_df[best_comparison_df['cover_type']=='undetected'].shape[0]/best_comparison_df.shape[0]*100
-    per_undeter_roads=best_comparison_df[best_comparison_df['cover_type']=='undetermined'].shape[0]/best_comparison_df.shape[0]*100
-    per_wrong_roads=round(100-per_right_roads-per_missing_roads-per_undeter_roads,2)
+    per_right_roads = best_comparison_df[best_comparison_df['CATEGORY']==best_comparison_df['cover_type']].shape[0] / best_comparison_df.shape[0]*100
+    per_missing_roads = best_comparison_df[best_comparison_df['cover_type']=='undetected'].shape[0] / best_comparison_df.shape[0]*100
+    per_undeter_roads = best_comparison_df[best_comparison_df['cover_type']=='undetermined'].shape[0] / best_comparison_df.shape[0]*100
+    per_wrong_roads = round(100 - per_right_roads-per_missing_roads-per_undeter_roads,2)
 
     logger.info(f"   {round(per_right_roads,2)}% of the roads were found and have the correct road type.")
     logger.info(f"   {round(per_undeter_roads,2)}% of the roads were detected, but have an undetermined road type.")
@@ -402,15 +406,15 @@ if __name__ == "__main__":
 
     for cover_type in ['undetected', 'undetermined']:
         print('\n')
-        per_type_roads_100=round(best_comparison_df[
+        per_type_roads_100 = round(best_comparison_df[
                                             (best_comparison_df['cover_type']==cover_type) &
                                             (best_comparison_df['CATEGORY']=='artificial')
-                                            ].shape[0]/best_comparison_df.shape[0]*100,2)
+                                            ].shape[0] / best_comparison_df.shape[0]*100,2)
 
-        per_type_roads_200=round(best_comparison_df[
+        per_type_roads_200 = round(best_comparison_df[
                                             (best_comparison_df['cover_type']==cover_type) &
                                             (best_comparison_df['CATEGORY']=='natural')
-                                            ].shape[0]/best_comparison_df.shape[0]*100,2)
+                                            ].shape[0] / best_comparison_df.shape[0]*100,2)
 
         logger.info(f"   {per_type_roads_100}% of the roads are {cover_type} and have the artificial type")
         logger.info(f"   {per_type_roads_200}% of the roads are {cover_type} and have the natural type")
@@ -557,7 +561,7 @@ if __name__ == "__main__":
                                             (determined_types[bin_accuracy_param[param][0]]>threshold-0.5) &
                                             (determined_types[bin_accuracy_param[param][0]]<=threshold) &
                                             (determined_types['CATEGORY']==bin_accuracy_param[param][1])
-                                            ]
+                                            ].copy()
 
                 if not roads_in_bin.empty:
                     bin_values.append(

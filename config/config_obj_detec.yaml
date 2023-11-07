@@ -91,6 +91,7 @@ assess_detections.py:
   working_directory: outputs
   datasets:
     ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
+    other_labels_geojson: json_inputs/other_labels.geojson
     image_metadata_json: obj_detector/img_metadata.json
     split_aoi_tiles_geojson: obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
     detections:

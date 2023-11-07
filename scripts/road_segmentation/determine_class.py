@@ -131,7 +131,7 @@ def determine_detected_class(predictions, roads, threshold=0):
     '''
 
     final_type={'road_id':[], 'cover_type':[], 'nat_score':[], 'art_score':[], 'diff_score':[]}
-    valid_predictions=predictions[predictions['score']>=threshold]
+    valid_predictions=predictions[predictions['score']>=threshold].copy()
     detected_roads_id=valid_predictions['OBJECTID'].unique().tolist()
 
     for road_id in roads['OBJECTID'].unique().tolist():
