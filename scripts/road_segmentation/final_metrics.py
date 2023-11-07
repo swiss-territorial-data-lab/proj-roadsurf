@@ -535,11 +535,11 @@ if __name__ == "__main__":
 
     tmp=by_class_metrics.select_dtypes(include=[np.number])
     by_class_metrics.loc[:, tmp.columns] = np.round(tmp, 3)
-    by_class_metrics.to_csv(os.path.join(table_folder, 'by_class_metrics.csv'))
+    by_class_metrics.to_csv(os.path.join(table_folder, 'by_class_metrics.csv'), index=False)
 
     tmp=global_metrics.select_dtypes(include=[np.number])
     global_metrics.loc[:, tmp.columns] = np.round(tmp, 3)
-    global_metrics.to_csv(os.path.join(table_folder, 'global metrics.csv'))
+    global_metrics.to_csv(os.path.join(table_folder, 'global metrics.csv'), index=False)
 
 
     logger.info('Calculate the bin accuracy to estimate the calibration...')
