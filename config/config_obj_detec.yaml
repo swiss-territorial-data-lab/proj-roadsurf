@@ -30,7 +30,9 @@ limit_used_tiles.py:
 
 generate_tilesets.py:
   working_directory: outputs
-  debug_mode: false
+  debug_mode: 
+    enable: False
+    nb_tiles_max: 100
   datasets:
     aoi_tiles_geojson: json_inputs/tiles_aoi.geojson
     ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
@@ -105,13 +107,13 @@ final_metrics.py:
   initial_folder: data
   processed_folder: outputs
   final_folder: outputs/final
-  baseline: artificial
+  baseline: random      # all artificial or random
   inputs:
     road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson
     other_labels: json_inputs/other_labels.geojson
     tiles: obj_detector/split_aoi_tiles.geojson
-    labels_id: obj_detector/labels_id.json
+    labels_id: obj_detector/category_ids.json
     to_evaluate:
       trn: obj_detector/trn_detections_at_0dot05_threshold.gpkg
       val: obj_detector/val_detections_at_0dot05_threshold.gpkg
