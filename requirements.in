@@ -10,7 +10,6 @@ loguru
 matplotlib
 morecantile
 pillow
-pip-tools
 plotly
 pyyaml
 opencv-python
