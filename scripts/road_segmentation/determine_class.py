@@ -107,7 +107,7 @@ def get_weighted_scores(ground_truth, predictions):
     ground_truth['area_label']=ground_truth.area
 
     fct_misc.test_crs(ground_truth.crs, predictions.crs)
-    all_intersections=gpd.overlay(ground_truth, predictions, how='intersection')
+    all_intersections=gpd.overlay(ground_truth, predictions, how='intersection', keep_geom_type=True)
 
     all_predicted_roads=all_intersections[(~all_intersections['BELAGSART'].isna()) &
                                                 (~all_intersections['score'].isna())].copy()

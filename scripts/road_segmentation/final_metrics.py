@@ -116,7 +116,7 @@ def show_metrics(metrics_by_class, global_metrics):
 
     for metric in metrics_by_class.itertuples():
         logger.info(f"The {metric.cover_class} roads have a precision of {round(metric.Pk, 2)}" \
-             + f"and a recall of {round(metric.Rk, 2)}")
+             + f" and a recall of {round(metric.Rk, 2)}.")
 
     logger.info(f"The final f1-score is {round(global_metrics.f1b[0], 2)}" \
         + f" with a precision of {round(global_metrics.Pb[0],2)} and a recall of" \
@@ -479,10 +479,10 @@ if __name__ == "__main__":
     print('\n')
 
     if best_filtered_threshold>0:
-        logger.info(f"For a threshold on the difference of indices of {best_filtered_threshold}...")
+        logger.info(f"For a threshold on the difference between indices of {best_filtered_threshold}...")
         show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
 
-        logger.info('%s %s', f'It would be wise to verify all the results with a difference on the indices',
+        logger.info(f'It would be wise to verify all the results with a difference between indices' +
                     f'lower than {best_filtered_threshold}.')
         
         filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')

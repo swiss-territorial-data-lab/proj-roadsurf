@@ -310,8 +310,7 @@ if GENERATE_LABELS:
 
         else:
             if ZOOM_LEVEL>18:
-                logger.info('%s %s',
-                            'The used zoom level is higher than 18.',
+                logger.info('The used zoom level is higher than 18. ' +    
                             'Only the tiles within an ok tile from zoom level 18 will be used.')
                 tiles_in_restricted_aoi_4326=tiles_in_restricted_aoi_4326.sjoin(ok_tiles[['OK', 'geometry']],
                                                                                 how='inner', predicate='within')
@@ -320,9 +319,8 @@ if GENERATE_LABELS:
             else:
                 logger.warning('Ok tiles for zoom levels lower than 18 are not developped yet :( No tile selection.')
                 
-        logger.warning('%s %s',
-                    'When using only the ok tiles, it is advised to include the oth dataset',
-                    'in the generation of the tilesets to ensure the correct selection of the tiles.')
+        logger.warning('When using only the ok tiles, it is advised to include the oth dataset' + 
+                    ' in the generation of the tilesets to ensure the correct selection of the tiles.')
 
     if RESTRICTED_AOI_TRAIN:
         logger.info('A subset of the AOI is used for the training.')
