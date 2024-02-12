@@ -19,6 +19,19 @@ logger = fct_misc.format_logger(logger)
 
 # Definition of functions ---------------------------
 
+
+def determine_category(row):
+    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
+
+    if row['BELAGSART']==100:
+        return 'artificial'
+    if row['BELAGSART']==200:
+        return 'natural'
+    else:
+        logger.error(f"Unexpected class: {row['BELAGSART']}")
+        sys.exit(1)
+
+
 def get_metrics(comparison_df, CLASSES):
     '''
     Get a dataframe with the GT, the predictions and the tags (TP, FP, FN)
@@ -177,7 +190,7 @@ if __name__ == "__main__":
 
     BASELINE = cfg['baseline']
 
-    ROAD_PARAMETERS = os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param'])
+    ROAD_PARAMETERS = os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param']) if 'road_param' in cfg['inputs'].keys() else False
 
     GROUND_TRUTH = os.path.join(PROCESSED_FOLDER, cfg['inputs']['ground_truth'])
     if 'other_labels' in cfg['inputs'].keys():
@@ -200,7 +213,8 @@ if __name__ == "__main__":
     # Importing files ----------------------------------
     logger.info('Importing files...')
 
-    road_parameters=pd.read_excel(ROAD_PARAMETERS)
+    if ROAD_PARAMETERS:
+        road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
     ground_truth=gpd.read_file(GROUND_TRUTH)
     ground_truth['gt_type']='gt'
@@ -234,13 +248,17 @@ if __name__ == "__main__":
             print(f"- {combination.id}: {combination.name}, {combination.supercategory}")
     CLASSES=labels_id['name'].unique().tolist()
 
-    logger.info('Filtering the GT for the roads of interest...')
-    filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
-    filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
-                                            how='inner',left_on='OBJEKTART',right_on='GDB-Code')
-    filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997].copy()
+    if ROAD_PARAMETERS:
+        logger.info('Filtering the GT for the roads of interest...')
+        filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
+        filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
+                                                how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+        filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997].copy()
 
-    filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_class.determine_category(row), axis=1)
+        filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
+    
+    else:
+        filtered_ground_truth = ground_truth.copy()
 
 
     logger.info('-- Roads in quarries are always naturals...')
@@ -260,69 +278,75 @@ if __name__ == "__main__":
     predictions_2056=predictions.to_crs(epsg=2056)
 
     predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
-    predicted_roads_filtered.drop(columns=['OBJEKTART', 'KUNSTBAUTE', 'BELAGSART', 'road_width', 'road_len',
-                                        'CATEGORY', 'SUPERCATEGORY', 'gt_type', 'GDB-Code', 'Width',
-                                            'title', 'tile_id', 'area_label', 'crs', 'joined_area'], inplace=True, errors='ignore')
+    predicted_roads_filtered = predicted_roads_filtered[
+        ['OBJECTID', 'dataset', 'score', 'det_class_name', 'weighted_score', 'area_pred_in_label', 'geometry']
+    ].copy()
 
     del visible_ground_truth_2056, ground_truth, predictions_2056
 
-    logger.info('Determining the best metrics for the predictions based on the validation dataset...')
-    val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val'].copy()
-    validation_tiles=considered_tiles[considered_tiles['dataset']=='val'].copy()
-    validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)].copy()
-
-    all_global_metrics=pd.DataFrame()
-    all_metrics_by_class=pd.DataFrame()
-
     thresholds=np.arange(0, 1., 0.05)
-    tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
+    if 'val' in predicted_roads_filtered.dataset.unique():
+        logger.info('Determining the best metrics for the predictions based on the validation dataset...')
+        val_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset']=='val'].copy()
+        validation_tiles=considered_tiles[considered_tiles['dataset']=='val'].copy()
+        validation_ground_truth=filtered_ground_truth[filtered_ground_truth.geometry.intersects(validation_tiles.unary_union)].copy()
 
-    for threshold in thresholds:
-        tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
+        all_global_metrics=pd.DataFrame()
+        all_metrics_by_class=pd.DataFrame()
 
-        val_comparison_df=determine_class.determine_detected_class(val_predictions, validation_ground_truth, threshold)
+        tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 
-        val_comparison_df['tag']=val_comparison_df.apply(lambda row: get_tag(row), axis=1)
+        for threshold in thresholds:
+            tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-        part_metrics_by_class, part_global_metrics = get_metrics(val_comparison_df, CLASSES)
+            val_comparison_df=determine_class.determine_detected_class(val_predictions, validation_ground_truth, threshold)
 
-        part_metrics_by_class['threshold']=threshold
-        part_global_metrics['threshold']=threshold
+            val_comparison_df['tag']=val_comparison_df.apply(lambda row: get_tag(row), axis=1)
 
-        all_metrics_by_class=pd.concat([all_metrics_by_class, part_metrics_by_class], ignore_index=True)
-        all_global_metrics=pd.concat([all_global_metrics, part_global_metrics], ignore_index=True)
+            part_metrics_by_class, part_global_metrics = get_metrics(val_comparison_df, CLASSES)
 
-        if threshold==0:
-            best_threshold=0
-            max_f1=part_global_metrics.f1b[0]
-            max_P=part_global_metrics.Pb[0]
+            part_metrics_by_class['threshold']=threshold
+            part_global_metrics['threshold']=threshold
 
-            best_val_by_class_metrics=part_metrics_by_class
-            best_val_global_metrics=part_global_metrics
+            all_metrics_by_class=pd.concat([all_metrics_by_class, part_metrics_by_class], ignore_index=True)
+            all_global_metrics=pd.concat([all_global_metrics, part_global_metrics], ignore_index=True)
 
-        elif (part_global_metrics.f1b>max_f1)[0] or ((part_global_metrics.f1b==max_f1)[0] and (part_global_metrics.Pb>max_P)[0]):
-            best_threshold=round(threshold,2)
-            max_f1=part_global_metrics.f1b[0]
-            max_P=part_global_metrics.Pb[0]
-            
-            best_val_by_class_metrics=part_metrics_by_class
-            best_val_global_metrics=part_global_metrics
+            if threshold==0:
+                best_threshold=0
+                max_f1=part_global_metrics.f1b[0]
+                max_P=part_global_metrics.Pb[0]
 
-            print('\n')
-            logger.info(f"The best threshold for the f1-score is now {best_threshold}.")
+                best_val_by_class_metrics=part_metrics_by_class
+                best_val_global_metrics=part_global_metrics
 
-        tqdm_log.update(1)
+            elif (part_global_metrics.f1b>max_f1)[0] or ((part_global_metrics.f1b==max_f1)[0] and (part_global_metrics.Pb>max_P)[0]):
+                best_threshold=round(threshold,2)
+                max_f1=part_global_metrics.f1b[0]
+                max_P=part_global_metrics.Pb[0]
+                
+                best_val_by_class_metrics=part_metrics_by_class
+                best_val_global_metrics=part_global_metrics
 
-    tqdm_log.close()
+                print('\n')
+                logger.info(f"The best threshold for the f1-score is now {best_threshold}.")
 
-    print('\n')
-    logger.info("Metrics for the validation dataset:")
-    show_metrics(best_val_by_class_metrics, best_val_global_metrics)
+            tqdm_log.update(1)
 
-    by_class_metrics=best_val_by_class_metrics.copy()
-    by_class_metrics['dataset']='val'
-    global_metrics=best_val_global_metrics.copy()
-    global_metrics['dataset']='val'
+        tqdm_log.close()
+
+        print('\n')
+        logger.info("Metrics for the validation dataset:")
+        show_metrics(best_val_by_class_metrics, best_val_global_metrics)
+
+        by_class_metrics=best_val_by_class_metrics.copy()
+        by_class_metrics['dataset']='val'
+        global_metrics=best_val_global_metrics.copy()
+        global_metrics['dataset']='val'
+
+    else:
+        best_threshold = cfg['threshold']
+        by_class_metrics = pd.DataFrame(columns=['cover_class', 'TP', 'FP', 'FN', 'Pk', 'Rk', 'f1k', 'count', 'threshold', 'dataset'])
+        global_metrics = pd.DataFrame(columns=['Pw', 'Rw', 'f1w', 'Pb', 'Rb', 'f1b', 'threshold', 'dataset'])
 
     print('\n')
     # Get the metrics for all the zones at once
@@ -347,20 +371,21 @@ if __name__ == "__main__":
     print('\n')
     logger.info('Metrics based on the trn, tst, val datasets...')
 
-    for dst in ['trn', 'tst']:
-        dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst].copy()
-        dst_tiles = considered_tiles[considered_tiles['dataset']==dst].copy()
-        dst_ground_truth = filtered_ground_truth[filtered_ground_truth.geometry.intersects(dst_tiles.unary_union)].copy()
+    if any(dst in ['trn', 'tst'] for dst in predicted_roads_filtered.dataset.unique()):
+        for dst in ['trn', 'tst']:
+            dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst].copy()
+            dst_tiles = considered_tiles[considered_tiles['dataset']==dst].copy()
+            dst_ground_truth = filtered_ground_truth[filtered_ground_truth.geometry.intersects(dst_tiles.unary_union)].copy()
 
-        dst_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(dst_predictions, dst_ground_truth,
-                                                                                by_class_metrics, global_metrics,
-                                                                                dst, best_threshold)
+            dst_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(dst_predictions, dst_ground_truth,
+                                                                                    by_class_metrics, global_metrics,
+                                                                                    dst, best_threshold)
 
 
-    not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])].copy()
-    ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt'].copy()
+        not_oth_predictions=predicted_roads_filtered[predicted_roads_filtered['dataset'].isin(['trn', 'tst', 'val'])].copy()
+        ground_truth_from_gt=filtered_ground_truth[filtered_ground_truth['gt_type']=='gt'].copy()
 
-    not_oth_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(not_oth_predictions, ground_truth_from_gt,
+        not_oth_comparison_df, by_class_metrics, global_metrics = from_preds_to_metrics(not_oth_predictions, ground_truth_from_gt,
                                                                                 by_class_metrics, global_metrics,
                                                                                 'training zone (trn, val, tst)', best_threshold, show=True)
 
@@ -426,74 +451,75 @@ if __name__ == "__main__":
 
     tqdm_log = tqdm(total=len(thresholds), position=1, leave=False)
 
-    for threshold in thresholds:
-        tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
+    if 'gt' in best_comparison_df.gt_type.unique():
+        for threshold in thresholds:
+            tqdm_log.set_description_str(f'Threshold = {threshold:.2f}')
 
-        filtered_results=best_comparison_df.copy()
-        filtered_results.drop(columns=['tag'], inplace=True)
-        filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_type']='undetermined'
-        filtered_results['tag']=filtered_results.apply(lambda row: get_tag(row), axis=1)
+            filtered_results=best_comparison_df.copy()
+            filtered_results.drop(columns=['tag'], inplace=True)
+            filtered_results.loc[filtered_results['diff_score']<threshold, 'cover_type']='undetermined'
+            filtered_results['tag']=filtered_results.apply(lambda row: get_tag(row), axis=1)
 
-        gt_filtered_results=filtered_results[filtered_results['gt_type']=='gt'].copy()
-        gt_part_metrics_by_class, gt_part_global_metrics = get_metrics(gt_filtered_results, CLASSES)
+            gt_filtered_results=filtered_results[filtered_results['gt_type']=='gt'].copy()
+            gt_part_metrics_by_class, gt_part_global_metrics = get_metrics(gt_filtered_results, CLASSES)
 
-        gt_part_metrics_by_class['threshold']=threshold
-        gt_part_global_metrics['threshold']=threshold
+            gt_part_metrics_by_class['threshold']=threshold
+            gt_part_global_metrics['threshold']=threshold
 
-        gt_filtered_metrics_by_class=pd.concat([gt_filtered_metrics_by_class, gt_part_metrics_by_class], ignore_index=True)
-        gt_filtered_global_metrics=pd.concat([gt_filtered_global_metrics, gt_part_global_metrics], ignore_index=True)
+            gt_filtered_metrics_by_class=pd.concat([gt_filtered_metrics_by_class, gt_part_metrics_by_class], ignore_index=True)
+            gt_filtered_global_metrics=pd.concat([gt_filtered_global_metrics, gt_part_global_metrics], ignore_index=True)
 
-        if  'oth' in PREDICTIONS.keys():
-            oth_filtered_results=filtered_results[filtered_results['gt_type']=='oth'].copy()
-            oth_part_metrics_by_class, oth_part_global_metrics = get_metrics(oth_filtered_results, CLASSES)
+            if  'oth' in PREDICTIONS.keys():
+                oth_filtered_results=filtered_results[filtered_results['gt_type']=='oth'].copy()
+                oth_part_metrics_by_class, oth_part_global_metrics = get_metrics(oth_filtered_results, CLASSES)
 
-            oth_part_metrics_by_class['threshold']=threshold
-            oth_part_global_metrics['threshold']=threshold
+                oth_part_metrics_by_class['threshold']=threshold
+                oth_part_global_metrics['threshold']=threshold
 
-            oth_filtered_metrics_by_class=pd.concat([oth_filtered_metrics_by_class, oth_part_metrics_by_class]
-                                                    , ignore_index=True)
-            oth_filtered_global_metrics=pd.concat([oth_filtered_global_metrics, oth_part_global_metrics], 
-                                                ignore_index=True)
+                oth_filtered_metrics_by_class=pd.concat([oth_filtered_metrics_by_class, oth_part_metrics_by_class]
+                                                        , ignore_index=True)
+                oth_filtered_global_metrics=pd.concat([oth_filtered_global_metrics, oth_part_global_metrics], 
+                                                    ignore_index=True)
 
-        if threshold==0:
-            best_filtered_threshold=0
-            best_filtered_results=filtered_results
-            max_f1=gt_part_global_metrics.f1b[0]
+            if threshold==0:
+                best_filtered_threshold=0
+                best_filtered_results=filtered_results
+                max_f1=gt_part_global_metrics.f1b[0]
+                
+                best_by_class_filtered_metrics=gt_part_metrics_by_class
+                best_global_filtered_metrics=gt_part_global_metrics
+
+            elif (gt_part_global_metrics.f1b>max_f1)[0]:
+                best_filtered_threshold=round(threshold,2)
+                best_filtered_results=filtered_results
+                max_f1=gt_part_global_metrics.f1b[0]
+                
+                best_by_class_filtered_metrics=gt_part_metrics_by_class
+                best_global_filtered_metrics=gt_part_global_metrics
+                print('\n')
+                logger.info(f"The best threshold of the difference of indices for the f1-score is now {best_filtered_threshold}.")
+
+            tqdm_log.update(1)
+
+        tqdm_log.close()
+        print('\n')
+
+        if best_filtered_threshold>0:
+            logger.info(f"For a threshold on the difference between indices of {best_filtered_threshold}...")
+            show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
+
+            logger.info(f'It would be wise to verify all the results with a difference between indices' +
+                        f'lower than {best_filtered_threshold}.')
             
-            best_by_class_filtered_metrics=gt_part_metrics_by_class
-            best_global_filtered_metrics=gt_part_global_metrics
+            filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
+            best_filtered_results.to_file(filepath)
+            written_files.append(filepath)
 
-        elif (gt_part_global_metrics.f1b>max_f1)[0]:
-            best_filtered_threshold=round(threshold,2)
-            best_filtered_results=filtered_results
-            max_f1=gt_part_global_metrics.f1b[0]
-            
-            best_by_class_filtered_metrics=gt_part_metrics_by_class
-            best_global_filtered_metrics=gt_part_global_metrics
-            print('\n')
-            logger.info(f"The best threshold of the difference of indices for the f1-score is now {best_filtered_threshold}.")
-
-        tqdm_log.update(1)
-
-    tqdm_log.close()
-    print('\n')
-
-    if best_filtered_threshold>0:
-        logger.info(f"For a threshold on the difference between indices of {best_filtered_threshold}...")
-        show_metrics(best_by_class_filtered_metrics, best_global_filtered_metrics)
-
-        logger.info(f'It would be wise to verify all the results with a difference between indices' +
-                    f'lower than {best_filtered_threshold}.')
-        
-        filepath=os.path.join(shp_gpkg_folder, 'filtered_types_from_detections.shp')
-        best_filtered_results.to_file(filepath)
-        written_files.append(filepath)
-
-    else:
-        logger.info('No threshold on the difference of indices would improve the results.')
+        else:
+            logger.info('No threshold on the difference of indices would improve the results.')
 
 
-    print('\n')
+        print('\n')
 
     # Get baseline
     if 'artificial' in BASELINE:
@@ -578,140 +604,141 @@ if __name__ == "__main__":
     fig = go.Figure()
     fig_k = go.Figure()
 
-    # Plot of the precision vs recall
-    fig.add_trace(
-        go.Scatter(
-            x=all_global_metrics['Rw'],
-            y=all_global_metrics['Pw'],
-            mode='markers+lines',
-            text=all_global_metrics['threshold'],
-            name='weighted aggregation'
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=all_global_metrics['Rb'],
-            y=all_global_metrics['Pb'],
-            mode='markers+lines',
-            text=all_global_metrics['threshold'],
-            name='balanced aggregation'
-        )
-    )
-
-    fig.update_layout(
-        xaxis_title="Recall",
-        yaxis_title="Precision",
-        xaxis=dict(range=[0., 1]),
-        yaxis=dict(range=[0., 1])
-    )
-
-    file_to_write = os.path.join(images_folder, 'precision_vs_recall_over_validation_set.html')
-    fig.write_html(file_to_write)
-    written_files.append(file_to_write)
-
-    if len(CLASSES)>1:
-        for id_cl in CLASSES:
-
-            fig_k.add_trace(
-                go.Scatter(
-                    x=all_metrics_by_class['Rk'][all_metrics_by_class['cover_class']==id_cl],
-                    y=all_metrics_by_class['Pk'][all_metrics_by_class['cover_class']==id_cl],
-                    mode='markers+lines',
-                    text=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
-                    name=str(id_cl) + ' roads'
-                )
+    if 'val' in predicted_roads_filtered.dataset.unique():
+        # Plot of the precision vs recall
+        fig.add_trace(
+            go.Scatter(
+                x=all_global_metrics['Rw'],
+                y=all_global_metrics['Pw'],
+                mode='markers+lines',
+                text=all_global_metrics['threshold'],
+                name='weighted aggregation'
             )
+        )
 
-        fig_k.update_layout(
+        fig.add_trace(
+            go.Scatter(
+                x=all_global_metrics['Rb'],
+                y=all_global_metrics['Pb'],
+                mode='markers+lines',
+                text=all_global_metrics['threshold'],
+                name='balanced aggregation'
+            )
+        )
+
+        fig.update_layout(
             xaxis_title="Recall",
             yaxis_title="Precision",
             xaxis=dict(range=[0., 1]),
             yaxis=dict(range=[0., 1])
         )
 
-        file_to_write = os.path.join(images_folder, 'precision_vs_recall_dep_on_class_over_val_set.html')
-        fig_k.write_html(file_to_write)
+        file_to_write = os.path.join(images_folder, 'precision_vs_recall_over_validation_set.html')
+        fig.write_html(file_to_write)
         written_files.append(file_to_write)
 
-    # Plot the number of TP, FN, and FPs
-    fig = go.Figure()
+        if len(CLASSES)>1:
+            for id_cl in CLASSES:
 
-    for id_cl in CLASSES:
-        
-        for y in ['TP', 'FN', 'FP']:
-
-            fig.add_trace(
-                go.Scatter(
-                    x=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
-                    y=all_metrics_by_class[y][all_metrics_by_class['cover_class']==id_cl],
-                    mode='markers+lines',
-                    name=y[0:2]+'_'+str(id_cl)
-                )
-            )
-
-        fig.update_layout(xaxis_title="threshold", yaxis_title="#")
-        
-    if len(CLASSES)>1:
-        file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_dep_on_class_over_val_set.html')
-
-    else:
-        file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_over_validation_set.html')
-
-    fig.write_html(file_to_write)
-    written_files.append(file_to_write)
-
-    # Plot the metrics vs thresholds
-    fig = go.Figure()
-
-    for y in ['Pw', 'Rw', 'f1w', 'Pb', 'Rb', 'f1b']:
-
-        fig.add_trace(
-            go.Scatter(
-                x=all_global_metrics['threshold'],
-                y=all_global_metrics[y],
-                mode='markers+lines',
-                name=y
-            )
-        )
-
-    fig.update_layout(xaxis_title="threshold")
-
-    file_to_write = os.path.join(images_folder, f'metrics_vs_threshold_over_validation_set.html')
-    fig.write_html(file_to_write)
-    written_files.append(file_to_write)
-
-    # Plot the number of Pk, Rk dep on class and threshold on the final score
-    fig = go.Figure()
-
-    for id_cl in CLASSES:
-        
-        for y in ['Pk', 'Rk']:
-
-            fig.add_trace(
-                go.Scatter(
-                    x=gt_filtered_metrics_by_class['threshold'][gt_filtered_metrics_by_class['cover_class']==id_cl],
-                    y=gt_filtered_metrics_by_class[y][gt_filtered_metrics_by_class['cover_class']==id_cl],
-                    mode='markers+lines',
-                    name=y[0:2]+'_'+str(id_cl) + '- gt'
-                )
-            )
-
-            if  'oth' in PREDICTIONS.keys():
-                fig.add_trace(
+                fig_k.add_trace(
                     go.Scatter(
-                        x=oth_filtered_metrics_by_class['threshold'][oth_filtered_metrics_by_class['cover_class']==id_cl],
-                        y=oth_filtered_metrics_by_class[y][oth_filtered_metrics_by_class['cover_class']==id_cl],
+                        x=all_metrics_by_class['Rk'][all_metrics_by_class['cover_class']==id_cl],
+                        y=all_metrics_by_class['Pk'][all_metrics_by_class['cover_class']==id_cl],
                         mode='markers+lines',
-                        name=y[0:2]+'_'+str(id_cl) + '- oth'
+                        text=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
+                        name=str(id_cl) + ' roads'
                     )
                 )
 
+            fig_k.update_layout(
+                xaxis_title="Recall",
+                yaxis_title="Precision",
+                xaxis=dict(range=[0., 1]),
+                yaxis=dict(range=[0., 1])
+            )
+
+            file_to_write = os.path.join(images_folder, 'precision_vs_recall_dep_on_class_over_val_set.html')
+            fig_k.write_html(file_to_write)
+            written_files.append(file_to_write)
+
+        # Plot the number of TP, FN, and FPs
+        fig = go.Figure()
+
+        for id_cl in CLASSES:
+            
+            for y in ['TP', 'FN', 'FP']:
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=all_metrics_by_class['threshold'][all_metrics_by_class['cover_class']==id_cl],
+                        y=all_metrics_by_class[y][all_metrics_by_class['cover_class']==id_cl],
+                        mode='markers+lines',
+                        name=y[0:2]+'_'+str(id_cl)
+                    )
+                )
+
+            fig.update_layout(xaxis_title="threshold", yaxis_title="#")
+            
+        if len(CLASSES)>1:
+            file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_dep_on_class_over_val_set.html')
+
+        else:
+            file_to_write = os.path.join(images_folder, f'TP-FN-FP_vs_threshold_over_validation_set.html')
+
+        fig.write_html(file_to_write)
+        written_files.append(file_to_write)
+
+        # Plot the metrics vs thresholds
+        fig = go.Figure()
+
+        for y in ['Pw', 'Rw', 'f1w', 'Pb', 'Rb', 'f1b']:
+
+            fig.add_trace(
+                go.Scatter(
+                    x=all_global_metrics['threshold'],
+                    y=all_global_metrics[y],
+                    mode='markers+lines',
+                    name=y
+                )
+            )
+
         fig.update_layout(xaxis_title="threshold")
-        
-    file_to_write = os.path.join(images_folder, f'metrics_vs_score_diff_threshold_dep_on_class.html')
-    fig.write_html(file_to_write)
-    written_files.append(file_to_write)
+
+        file_to_write = os.path.join(images_folder, f'metrics_vs_threshold_over_validation_set.html')
+        fig.write_html(file_to_write)
+        written_files.append(file_to_write)
+
+        # Plot the number of Pk, Rk dep on class and threshold on the final score
+        fig = go.Figure()
+
+        for id_cl in CLASSES:
+            
+            for y in ['Pk', 'Rk']:
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=gt_filtered_metrics_by_class['threshold'][gt_filtered_metrics_by_class['cover_class']==id_cl],
+                        y=gt_filtered_metrics_by_class[y][gt_filtered_metrics_by_class['cover_class']==id_cl],
+                        mode='markers+lines',
+                        name=y[0:2]+'_'+str(id_cl) + '- gt'
+                    )
+                )
+
+                if  'oth' in PREDICTIONS.keys():
+                    fig.add_trace(
+                        go.Scatter(
+                            x=oth_filtered_metrics_by_class['threshold'][oth_filtered_metrics_by_class['cover_class']==id_cl],
+                            y=oth_filtered_metrics_by_class[y][oth_filtered_metrics_by_class['cover_class']==id_cl],
+                            mode='markers+lines',
+                            name=y[0:2]+'_'+str(id_cl) + '- oth'
+                        )
+                    )
+
+            fig.update_layout(xaxis_title="threshold")
+            
+        file_to_write = os.path.join(images_folder, f'metrics_vs_score_diff_threshold_dep_on_class.html')
+        fig.write_html(file_to_write)
+        written_files.append(file_to_write)
 
     # Make the calibration curve
     fig=go.Figure()

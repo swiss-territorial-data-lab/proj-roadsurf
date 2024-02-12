@@ -27,16 +27,6 @@ def get_corresponding_class(row, labels_id):
         logger.error(f"Unexpected class: {row['det_class']}")
         sys.exit(1)
 
-def determine_category(row):
-    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
-
-    if row['BELAGSART']==100:
-        return 'artificial'
-    if row['BELAGSART']==200:
-        return 'natural'
-    else:
-        logger.error(f"Unexpected class: {row['BELAGSART']}")
-        sys.exit(1)
 
 def get_roads_in_quarries(quarries, roads):
     '''
@@ -58,6 +48,7 @@ def get_roads_in_quarries(quarries, roads):
                                     roads_in_quarries['OBJECTID'].unique().tolist())].reset_index(drop=True)
 
     return roads_in_quarries, roads_not_in_quarries
+
 
 def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
     '''
@@ -94,6 +85,7 @@ def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
 
     return clipped_labels_gdf
 
+
 def get_weighted_scores(ground_truth, predictions):
     '''
     Get the areas of intersection between the predictions and the labels and use them to weight the confidence score
@@ -109,7 +101,7 @@ def get_weighted_scores(ground_truth, predictions):
     fct_misc.test_crs(ground_truth.crs, predictions.crs)
     all_intersections=gpd.overlay(ground_truth, predictions, how='intersection', keep_geom_type=True)
 
-    all_predicted_roads=all_intersections[(~all_intersections['BELAGSART'].isna()) &
+    all_predicted_roads=all_intersections[(~all_intersections['CATEGORY'].isna()) &
                                                 (~all_intersections['score'].isna())].copy()
     all_predicted_roads['joined_area']=all_predicted_roads.area
     all_predicted_roads['area_pred_in_label']=round(all_predicted_roads['joined_area']/all_predicted_roads['area_label'], 2)
@@ -118,6 +110,7 @@ def get_weighted_scores(ground_truth, predictions):
     predicted_roads=all_predicted_roads[all_predicted_roads.area_pred_in_label > 0.05].copy()
 
     return predicted_roads
+
 
 def determine_detected_class(predictions, roads, threshold=0):
     '''
@@ -189,6 +182,7 @@ def determine_detected_class(predictions, roads, threshold=0):
 
     return comparison_df
 
+
 if __name__ == "__main__":
 
     tic = time.time()
@@ -206,7 +200,7 @@ if __name__ == "__main__":
 
     THRESHOLD=cfg['threshold']
 
-    ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param'])
+    ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param']) if 'road_param' in cfg['inputs'].keys() else False
 
     ROADS=os.path.join(PROCESSED_FOLDER, cfg['inputs']['roads'])
 
@@ -223,7 +217,8 @@ if __name__ == "__main__":
     # Importing files ----------------------------------
     logger.info('Importing files...')
 
-    road_parameters=pd.read_excel(ROAD_PARAMETERS)
+    if ROAD_PARAMETERS:
+        road_parameters=pd.read_excel(ROAD_PARAMETERS)
 
     initial_road_polygons=gpd.read_file(ROADS)
 
@@ -243,10 +238,13 @@ if __name__ == "__main__":
 
     # Information treatment ----------------------------
 
-    logger.info('Filtering the GT for the roads of interest...')
-    filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
-    filtered_road_polys=initial_road_polygons.merge(filtered_road_parameters[['GDB-Code','Width']], 
-                                            how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+    if ROAD_PARAMETERS:
+        logger.info('Filtering the GT for the roads of interest...')
+        filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
+        filtered_road_polys=initial_road_polygons.merge(filtered_road_parameters[['GDB-Code','Width']], 
+                                                how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+    else:
+        filtered_road_polys = initial_road_polygons.copy()
 
     # Roads in quarries are always naturals
     logger.info('-- Roads in quarries are always naturals...')
@@ -258,7 +256,7 @@ if __name__ == "__main__":
 
     logger.info('Limiting the labels to the visible area of labels and predictions...')
 
-    visible_road_polys=clip_labels(filtered_road_polys, tiles[['title', 'id', 'geometry']])
+    visible_road_polys=clip_labels(filtered_road_polys, tiles[['title', 'id', 'geometry']].copy())
 
     logger.info('Getting the intersecting area between predictions and labels...')
 
@@ -274,3 +272,7 @@ if __name__ == "__main__":
     filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
     final_roads.to_file(filepath)
     written_files.append(filepath)
+
+    logger.success('The following files were written:')
+    for file in written_files:
+        logger.success(file)

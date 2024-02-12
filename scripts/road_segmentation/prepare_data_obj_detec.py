@@ -48,7 +48,7 @@ else:
     if DETERMINE_ROAD_SURFACES:
         ROADS_IN = os.path.join(INPUT_DIR, INPUT['input_files']['roads'])
         FORESTS = os.path.join(INPUT_DIR, INPUT['input_files']['forests'])
-    ROADS_PARAM = os.path.join(INPUT_DIR, INPUT['input_files']['roads_param'])
+    ROADS_PARAM = os.path.join(INPUT_DIR, INPUT['input_files']['roads_param']) if 'road_param' in INPUT['input_files'].keys() else False
     AOI = os.path.join(INPUT_DIR, INPUT['input_files']['aoi'])
 
     OUTPUT_DIR = cfg['output_folder']
@@ -59,7 +59,7 @@ else:
     # Only keep roads and uncovered bridges 
     KUNSTBAUTE_TO_KEEP=[100, 200]
     # Only keep roads with an artificial or a natural surface.
-    BELAGSART_TO_KEEP=[100, 200]
+    BELAGSART_TO_KEEP=False
 
     if 'ok_tiles' in cfg.keys():
         OK_TILES = os.path.join(OUTPUT_DIR, cfg['ok_tiles'])
@@ -203,10 +203,9 @@ if GENERATE_TILES_INFO or GENERATE_LABELS:
 
         logger.info('Importing files...')
         if 'layer' in cfg['processed_input'].keys():
-            non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, ROADS_FOR_LABELS), layer=cfg['processed_input']['layer'])
+            non_forest_roads=gpd.read_file(ROADS_FOR_LABELS, layer=cfg['processed_input']['layer'])
         else:
-            non_forest_roads=gpd.read_file(os.path.join(path_shp_gpkg, ROADS_FOR_LABELS))
-        roads_parameters=pd.read_excel(ROADS_PARAM)
+            non_forest_roads=gpd.read_file(ROADS_FOR_LABELS)
 
 if GENERATE_TILES_INFO:
     print()
@@ -214,12 +213,20 @@ if GENERATE_TILES_INFO:
 
     logger.info('Determination of the information for the tiles to consider...')
 
-    roads_parameters_filtered=roads_parameters[roads_parameters['to keep']=='yes'].copy()
-    roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
+    if ROADS_PARAM:
+        roads_parameters=pd.read_excel(ROADS_PARAM)
+        roads_parameters_filtered=roads_parameters[roads_parameters['to keep']=='yes'].copy()
+        roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
+        roads_of_interest=non_forest_roads.merge(roads_parameters_filtered[['GDB-Code']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
 
-    roads_of_interest=non_forest_roads.merge(roads_parameters_filtered[['GDB-Code']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
-    roads_to_exclude=roads_of_interest[~roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
-    road_id_to_exclude=roads_to_exclude['OBJECTID'].unique().tolist()
+    else:
+        roads_of_interest = non_forest_roads.copy()
+
+    if BELAGSART_TO_KEEP:
+        roads_to_exclude=roads_of_interest[~roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
+        road_id_to_exclude=roads_to_exclude['OBJECTID'].unique().tolist()
+    else:
+        road_id_to_exclude = []
 
     aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=aoi.crs)
 
@@ -229,12 +236,9 @@ if GENERATE_TILES_INFO:
         aoi_geom.to_crs(crs=roads_of_interest.crs, inplace=True)
     roi_in_aoi=roads_of_interest.overlay(aoi_geom, how='intersection')
 
-    del roads_parameters, roads_parameters_filtered, roads_of_interest
-
     roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='roads')
 
-    roi_in_aoi.drop(columns=['BELAGSART', 'road_width', 'OBJEKTART',
-                            'KUNSTBAUTE', 'GDB-Code', 'road_len'], inplace=True)
+    roi_in_aoi = roi_in_aoi[['OBJECTID', 'geometry']]
     
     roi_4326=roi_in_aoi.to_crs(epsg=4326)
     valid_roi_4326=fct_misc.test_valid_geom(roi_4326, correct=True, gdf_obj_name="reprojected roads")
@@ -332,24 +336,28 @@ if GENERATE_LABELS:
         tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
 
     # Attribute object category and supercategory to labels    
-    labels_gdf_2056=non_forest_roads[non_forest_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)].copy()
-    labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
-    labels_gdf_2056['SUPERCATEGORY']='road'
-    labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
-    labels_gdf=fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='labels')
+    if BELAGSART_TO_KEEP:
+        labels_gdf_2056=non_forest_roads[non_forest_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)].copy()
+        labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
+        labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
+        labels_gdf = fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='labels')
+    else:
+        labels_gdf = non_forest_roads.copy()
+    labels_gdf['SUPERCATEGORY'] = 'road'
 
     logger.info('Labels on tiles...')
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
     GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 
-    # Exclude tile with undetermined roads
-    tiles_w_undet_road=GT_labels_gdf[GT_labels_gdf['CATEGORY']=='else']['id'].unique().tolist()
-    GT_labels_gdf = GT_labels_gdf[~GT_labels_gdf['id'].isin(tiles_w_undet_road)]
+    if not GT_labels_gdf.empty:
+        # Exclude tile with undetermined roads
+        tiles_w_undet_road=GT_labels_gdf[GT_labels_gdf['CATEGORY']=='else']['id'].unique().tolist()
+        GT_labels_gdf = GT_labels_gdf[~GT_labels_gdf['id'].isin(tiles_w_undet_road)]
 
-    # the following two lines make sure that no object is counted more than once in case it intersects multiple tiles
-    GT_labels_gdf = GT_labels_gdf[labels_gdf.columns]
-    GT_labels_gdf.drop_duplicates(inplace=True)
+        # the following two lines make sure that no object is counted more than once in case it intersects multiple tiles
+        GT_labels_gdf = GT_labels_gdf[labels_gdf.columns]
+        GT_labels_gdf.drop_duplicates(inplace=True)
     OTH_labels_gdf = labels_gdf[~labels_gdf.index.isin(GT_labels_gdf.index)]
 
     try:
@@ -362,9 +370,9 @@ if GENERATE_LABELS:
 
     print()
     logger.info(f'{GT_labels_gdf.shape[0]} labels are saved as ground truth.')
-    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.BELAGSART==100].shape[0]} labels are tagged artificial')
-    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.BELAGSART==200].shape[0]} labels are tagged natural.')
-    logger.info(f'{OTH_labels_gdf.shape[0]} labels are saved as the other lables.')
+    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="artificial"].shape[0]} labels are tagged artificial')
+    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="natrual"].shape[0]} labels are tagged natural.')
+    logger.info(f'{OTH_labels_gdf.shape[0]} labels are saved as the other labels.')
     print()
 
     logger.success('Done generating the labels for the object detector...')
