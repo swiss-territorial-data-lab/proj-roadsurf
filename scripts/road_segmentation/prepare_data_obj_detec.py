@@ -17,6 +17,20 @@ import functions.fct_misc as fct_misc
 
 logger = fct_misc.format_logger(logger)
 
+
+# Define functions --------------------------------------------
+
+def determine_category(row):
+    if (row['BELAGSART']==100) or (row['BELAGSART']=='Hart'):
+        return 'artificial'
+    if (row['BELAGSART']==200) or (row['BELAGSART']=='Natur'):
+        return 'natural'
+    else:
+        return 'else'
+
+
+# Define constants -----------------------------------------
+
 tic = time()
 logger.info('Starting...')
 
@@ -28,8 +42,6 @@ logger.info(f"Using {args.config_file} as config file.")
 
 with open(args.config_file) as fp:
     cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
-
-# Define constants -----------------------------------------
 
 # Define tasks to do
 DETERMINE_ROAD_SURFACES = cfg['tasks']['determine_roads_surfaces']
@@ -47,19 +59,19 @@ else:
 
     if DETERMINE_ROAD_SURFACES:
         ROADS_IN = os.path.join(INPUT_DIR, INPUT['input_files']['roads'])
-        FORESTS = os.path.join(INPUT_DIR, INPUT['input_files']['forests'])
-    ROADS_PARAM = os.path.join(INPUT_DIR, INPUT['input_files']['roads_param']) if 'road_param' in INPUT['input_files'].keys() else False
-    AOI = os.path.join(INPUT_DIR, INPUT['input_files']['aoi'])
+        FORESTS = os.path.join(INPUT_DIR, INPUT['input_files']['forests']) if 'forests' in INPUT['input_files'].keys() else False
+    ROADS_PARAM = os.path.join(INPUT_DIR, INPUT['input_files']['roads_param']) if 'roads_param' in INPUT['input_files'].keys() else False
+    AOI = os.path.join(INPUT_DIR, INPUT['input_files']['aoi']) if 'aoi' in INPUT['input_files'].keys() else False
 
     OUTPUT_DIR = cfg['output_folder']
 
     # Based on the metadata
     # Remove places, motorail, ferry, marked trace, climbing path and provisory pathes of soft mobility.
-    NOT_ROAD=[12, 13, 14, 19, 22, 23]
+    NOT_ROAD=[12, 13, 14, 19, 22, 23, 'Platz', 'Autozug', 'Faehre', 'Markierte Spur', 'Klettersteig', 'Provisorium']
     # Only keep roads and uncovered bridges 
-    KUNSTBAUTE_TO_KEEP=[100, 200]
+    KUNSTBAUTE_TO_KEEP=[100, 200, 'Keine', 'Bruecke']
     # Only keep roads with an artificial or a natural surface.
-    BELAGSART_TO_KEEP=False
+    BELAGSART_TO_KEEP=[100, 200, 'Hart', 'Natur']
 
     if 'ok_tiles' in cfg.keys():
         OK_TILES = os.path.join(OUTPUT_DIR, cfg['ok_tiles'])
@@ -77,15 +89,6 @@ else:
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
 path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json_inputs'))
 
-# Define functions --------------------------------------------
-
-def determine_category(row):
-    if row['BELAGSART']==100:
-        return 'artificial'
-    if row['BELAGSART']==200:
-        return 'natural'
-    else:
-        return 'else'
 
 # Information treatment ------------------------------------------
 
@@ -94,19 +97,20 @@ if DETERMINE_ROAD_SURFACES:
     logger.info('Importing files...')
 
     roads=gpd.read_file(ROADS_IN)
-    forests=gpd.read_file(FORESTS)
+    if FORESTS:
+        forests=gpd.read_file(FORESTS)
 
     roads_parameters=pd.read_excel(ROADS_PARAM)
 
     logger.info('Filtering the considered roads...')
     
-    roads_of_interest=roads[~roads['OBJEKTART'].isin(NOT_ROAD)]
-    uncovered_roads=roads_of_interest[roads_of_interest['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)]
+    roads_of_interest=roads[~roads['OBJEKTART'].isin(NOT_ROAD)].copy()
+    uncovered_roads=roads_of_interest[roads_of_interest['KUNSTBAUTE'].isin(KUNSTBAUTE_TO_KEEP)].copy()
 
     roads_parameters_filtered=roads_parameters[~roads_parameters['Width'].isna()].copy()
-    roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
+    roads_parameters_filtered.drop_duplicates(subset='Type',inplace=True)       # Keep first by default 
 
-    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['GDB-Code','Width']], how='inner', left_on='OBJEKTART', right_on='GDB-Code')
+    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['Type','Width']], how='inner', left_on='OBJEKTART', right_on='Type')
 
     uncovered_roads.drop(columns=[
                                 'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1', 'UUID',
@@ -179,19 +183,23 @@ if DETERMINE_ROAD_SURFACES:
     corr_overlap.drop(columns=['saved_geom'],inplace=True)
     corr_overlap.set_crs(epsg=2056, inplace=True)
 
-    logger.info('-- Excluding roads under forest canopy ...')
+    if FORESTS:
+        logger.info('-- Excluding roads under forest canopy ...')
 
-    fct_misc.test_crs(corr_overlap.crs, forests.crs)
+        fct_misc.test_crs(corr_overlap.crs, forests.crs)
 
-    forests['buffered_geom']=forests.buffer(3)
-    forests.drop(columns=['geometry'], inplace=True)
-    forests.rename(columns={'buffered_geom':'geometry'}, inplace=True)
+        forests['buffered_geom']=forests.buffer(3)
+        forests.drop(columns=['geometry'], inplace=True)
+        forests.rename(columns={'buffered_geom':'geometry'}, inplace=True)
 
-    non_forest_roads=corr_overlap.copy()
-    non_forest_roads=non_forest_roads.overlay(forests[['UUID','geometry']],how='difference')
+        non_forest_roads=corr_overlap.copy()
+        non_forest_roads=non_forest_roads.overlay(forests[['UUID','geometry']],how='difference')
 
-    non_forest_roads.drop(columns=['GDB-Code'],inplace=True)
-    non_forest_roads.rename(columns={'Width':'road_width'}, inplace=True)
+        non_forest_roads.drop(columns=['Type'],inplace=True)
+        non_forest_roads.rename(columns={'Width':'road_width'}, inplace=True)
+    
+    else:
+        non_forest_roads = corr_overlap.copy()
 
     logger.success('Done determining the surface of the roads from lines!')
 
@@ -209,15 +217,14 @@ if GENERATE_TILES_INFO or GENERATE_LABELS:
 
 if GENERATE_TILES_INFO:
     print()
-    aoi=gpd.read_file(AOI)
 
     logger.info('Determination of the information for the tiles to consider...')
 
     if ROADS_PARAM:
         roads_parameters=pd.read_excel(ROADS_PARAM)
         roads_parameters_filtered=roads_parameters[roads_parameters['to keep']=='yes'].copy()
-        roads_parameters_filtered.drop_duplicates(subset='GDB-Code',inplace=True)       # Keep first by default 
-        roads_of_interest=non_forest_roads.merge(roads_parameters_filtered[['GDB-Code']], how='right',left_on='OBJEKTART',right_on='GDB-Code')
+        roads_parameters_filtered.drop_duplicates(subset='Type',inplace=True)       # Keep first by default 
+        roads_of_interest=non_forest_roads.merge(roads_parameters_filtered[['Type']], how='inner',left_on='OBJEKTART',right_on='Type')
 
     else:
         roads_of_interest = non_forest_roads.copy()
@@ -228,13 +235,18 @@ if GENERATE_TILES_INFO:
     else:
         road_id_to_exclude = []
 
-    aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=aoi.crs)
 
-    try:
-        assert(aoi_geom.crs==roads_of_interest.crs)
-    except Exception:
-        aoi_geom.to_crs(crs=roads_of_interest.crs, inplace=True)
-    roi_in_aoi=roads_of_interest.overlay(aoi_geom, how='intersection')
+    if AOI:
+        aoi=gpd.read_file(AOI)
+        aoi_geom=gpd.GeoDataFrame({'id': [0], 'geometry': [aoi['geometry'].unary_union]}, crs=aoi.crs)
+
+        try:
+            assert(aoi_geom.crs==roads_of_interest.crs)
+        except Exception:
+            aoi_geom.to_crs(crs=roads_of_interest.crs, inplace=True)
+        roi_in_aoi=roads_of_interest.overlay(aoi_geom, how='intersection')
+    else:
+        roi_in_aoi = roads_of_interest.copy()
 
     roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='roads')
 
@@ -342,7 +354,7 @@ if GENERATE_LABELS:
         labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
         labels_gdf = fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='labels')
     else:
-        labels_gdf = non_forest_roads.copy()
+        labels_gdf = non_forest_roads.to_crs(epsg=4326)
     labels_gdf['SUPERCATEGORY'] = 'road'
 
     logger.info('Labels on tiles...')

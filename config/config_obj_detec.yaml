@@ -5,26 +5,26 @@ temp_prepare_ne.py:
 
 prepare_data_obj_detec.py:
   tasks:
-    determine_roads_surfaces: False
-    generate_tiles_info: true
-    generate_labels: true
+    determine_roads_surfaces: True
+    generate_tiles_info: True
+    generate_labels: True
   input:
-    input_folder: data
+    input_folder: inputs
     input_files:
-      roads: swissTLM3D/roads_lines.shp
-      # roads_param: roads_parameters.xlsx
-      forests: swissTLM3D/forests.shp
-      aoi: ../outputs/shapefiles_gpkg/aoi.shp
-      restricted_aoi_training: AOI/2_tiles_AOI.shp
+      roads: roads/roads_of_interest.shp
+      roads_param: roads/roads_parameters.xlsx
+      # forests: ../data/swissTLM3D/forests.shp
+      # aoi: aoi/aoi.gpkg
+      # restricted_aoi_training: AOI/2_tiles_AOI.shp
   processed_input:
-    roads_for_labels: outputs/shapefiles_gpkg/roads_for_OD.shp
-  output_folder: outputs/dombresson
+    roads_for_labels: outputs/TLM/shapefiles_gpkg/roads_for_OD.shp
+  output_folder: outputs/TLM
   # ok_tiles: <relative path from the output folder>
   zoom_level: 18  # keep between 17 and 20 
 
 limit_used_tiles.py:
   considered_datasets: trn, tst, val
-  working_directory: outputs/dombresson/json_inputs
+  working_directory: outputs/TLM/json_inputs
   input_directory: .
   output_directory: .
   ground_truth_labels: ground_truth_labels.geojson
@@ -32,7 +32,7 @@ limit_used_tiles.py:
   tiles: tiles_aoi.geojson
 
 generate_tilesets.py:
-  working_directory: outputs/dombresson
+  working_directory: outputs/TLM
   debug_mode: 
     enable: False
     nb_tiles_max: 100
@@ -59,11 +59,11 @@ generate_tilesets.py:
       url: https://www.swisstopo.admin.ch/fr/home/meta/conditions-generales/geodonnees/ogd.html
 
 calculate_statistics.py:
-  working_folder: outputs/dombresson/obj_detector
+  working_folder: outputs/TLM/obj_detector
   tiles: split_aoi_tiles.geojson
 
 train_model.py:
-  working_directory: outputs/dombresson/obj_detector
+  working_directory: outputs/TLM/obj_detector
   log_subfolder: logs
   sample_tagged_img_subfolder: sample_training_images
   COCO_files: # relative paths, w/ respect to the working_folder
@@ -75,7 +75,7 @@ train_model.py:
       model_zoo_checkpoint_url: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml"
       
 make_detections.py:
-  working_directory: outputs/dombresson/obj_detector
+  working_directory: outputs/TLM/obj_detector
   log_subfolder: logs
   sample_tagged_img_subfolder: sample_detection_images
   image_metadata_json: img_metadata.json
@@ -84,16 +84,16 @@ make_detections.py:
       # val: COCO_val.json
       # tst: COCO_tst.json
       oth: COCO_oth.json
-  detectron2_config_file: ../../config/detectron2_config_3bands.yaml # path relative to the working_folder
+  detectron2_config_file: ../../../config/detectron2_config_3bands.yaml # path relative to the working_folder
   model_weights:
-      pth_file: ../../inputs/models/model_0010999.pth
+      pth_file: ../../../inputs/models/model_0010999.pth
   rdp_simplification: # rdp = Ramer-Douglas-Peucker
     enabled: true
     epsilon: 0.75 # cf. https://rdp.readthedocs.io/en/latest/
   score_lower_threshold: 0.05
   
 assess_detections.py:
-  working_directory: outputs/dombresson
+  working_directory: outputs/TLM
   datasets:
     ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
     other_labels_geojson: json_inputs/other_labels.geojson
@@ -109,8 +109,8 @@ assess_detections.py:
 
 final_metrics.py:
   initial_folder: data
-  processed_folder: outputs/dombresson
-  final_folder: outputs/dombresson/final
+  processed_folder: outputs/TLM
+  final_folder: outputs/TLM/final
   baseline: random      # all artificial or random
   threshold: 0
   inputs:

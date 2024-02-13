@@ -156,7 +156,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
             
             new_row_serie=polygons.loc[p2_idx].copy()
             new_row_dict={'OBJECTID': [], 'OBJEKTART': [], 'KUNSTBAUTE': [], 'BELAGSART': [], 'geometry': [], 
-                        'GDB-Code': [], 'Width': [], 'saved_geom': []}
+                        'Type': [], 'Width': [], 'saved_geom': []}
             new_poly=0
             for elem_geom in parts['geometry'].values[1:]:
                 
@@ -165,7 +165,7 @@ def polygons_diff_without_artifacts(polygons, p1_idx, p2_idx, keep_everything=Fa
                 new_row_dict['OBJEKTART'].append(new_row_serie.OBJEKTART)
                 new_row_dict['KUNSTBAUTE'].append(new_row_serie.KUNSTBAUTE)
                 new_row_dict['BELAGSART'].append(new_row_serie.BELAGSART)
-                new_row_dict['GDB-Code'].append(new_row_serie['GDB-Code'])
+                new_row_dict['Type'].append(new_row_serie['Type'])
                 new_row_dict['Width'].append(new_row_serie.Width)
                 new_row_dict['saved_geom'].append(new_row_serie.saved_geom)
 
