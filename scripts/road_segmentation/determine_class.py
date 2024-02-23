@@ -160,9 +160,9 @@ def determine_detected_class(predictions, roads, threshold=0):
 
         # If the large majority of the predictions are for one type, attribute this type.
         detection_type_count = intersecting_predictions.groupby(['det_class_name']).size().reset_index(name='count')
-        detection_type_count['percentage'] = detection_type_count['count'] / detection_type_count.shape[0]
+        detection_type_count['percentage'] = detection_type_count['count'] / detection_type_count['count'].sum()
 
-        if any(detection_type_count.percentage > 0.65):
+        if any(detection_type_count.percentage.to_numpy() > 0.90) & (detection_type_count.shape[0] > 1):
             final_type['road_id'].append(road_id)
             final_type['cover_type'].append(
                 detection_type_count.loc[detection_type_count['count']==detection_type_count['count'].max(), 'det_class_name'].iloc[0]
