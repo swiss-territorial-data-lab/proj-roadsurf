@@ -25,7 +25,11 @@ def determine_category(row):
 
     if row['BELAGSART']==100:
         return 'artificial'
-    if row['BELAGSART']==200:
+    elif row['BELAGSART']==200:
+        return 'natural'
+    elif row['BELAGSART']=='Hart':
+        return 'artificial'
+    elif row['BELAGSART']=='Natur':
         return 'natural'
     else:
         logger.error(f"Unexpected class: {row['BELAGSART']}")
@@ -251,8 +255,8 @@ if __name__ == "__main__":
     if ROAD_PARAMETERS:
         logger.info('Filtering the GT for the roads of interest...')
         filtered_road_parameters=road_parameters[road_parameters['to keep']=='yes'].copy()
-        filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['GDB-Code','Width']], 
-                                                how='inner',left_on='OBJEKTART',right_on='GDB-Code')
+        filtered_ground_truth=ground_truth.merge(filtered_road_parameters[['Type','Width']], 
+                                                how='inner',left_on='OBJEKTART',right_on='Type')
         filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997].copy()
 
         filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
@@ -368,10 +372,9 @@ if __name__ == "__main__":
     best_comparison_df.to_file(filepath)
     written_files.append(filepath)
 
-    print('\n')
-    logger.info('Metrics based on the trn, tst, val datasets...')
-
     if any(dst in ['trn', 'tst'] for dst in predicted_roads_filtered.dataset.unique()):
+        print()
+        logger.info('Metrics based on the trn, tst, val datasets...')
         for dst in ['trn', 'tst']:
             dst_predictions = predicted_roads_filtered[predicted_roads_filtered['dataset']==dst].copy()
             dst_tiles = considered_tiles[considered_tiles['dataset']==dst].copy()
@@ -389,7 +392,7 @@ if __name__ == "__main__":
                                                                                 by_class_metrics, global_metrics,
                                                                                 'training zone (trn, val, tst)', best_threshold, show=True)
 
-    if 'oth' in PREDICTIONS.keys():
+    if 'oth' in PREDICTIONS.keys() and any(dst in ['trn', 'tst'] for dst in predicted_roads_filtered.dataset.unique()):
         print('\n')
         logger.info('Metrics based on the predictions of the oth dataset...')
 

@@ -107,7 +107,10 @@ def get_weighted_scores(ground_truth, predictions):
     all_predicted_roads['area_pred_in_label']=round(all_predicted_roads['joined_area']/all_predicted_roads['area_label'], 2)
     all_predicted_roads['weighted_score']=all_predicted_roads['area_pred_in_label']*all_predicted_roads['score']
 
-    predicted_roads=all_predicted_roads[all_predicted_roads.area_pred_in_label > 0.05].copy()
+    logger.info('Only consider joined area over 1 m2 and weighted score over 0.05.')
+    predicted_roads=all_predicted_roads[
+        (all_predicted_roads.joined_area > 1) & (all_predicted_roads.area_pred_in_label > 0.05)
+    ].copy()
 
     return predicted_roads
 
@@ -155,7 +158,19 @@ def determine_detected_class(predictions, roads, threshold=0):
         else:
             artificial_index=0
 
-        if artificial_index==natural_index:
+        # If the large majority of the predictions are for one type, attribute this type.
+        detection_type_count = intersecting_predictions.groupby(['det_class_name']).size().reset_index(name='count')
+        detection_type_count['percentage'] = detection_type_count['count'] / detection_type_count.shape[0]
+
+        if any(detection_type_count.percentage > 0.65):
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append(
+                detection_type_count.loc[detection_type_count['count']==detection_type_count['count'].max(), 'det_class_name'].iloc[0]
+            )
+            final_type['diff_score'].append(pd.NA)
+
+            # Else, control the index values
+        elif artificial_index==natural_index:
             final_type['road_id'].append(road_id)
             final_type['cover_type'].append('undetermined')
             final_type['diff_score'].append(0)

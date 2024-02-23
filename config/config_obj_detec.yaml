@@ -114,7 +114,7 @@ final_metrics.py:
   baseline: random      # all artificial or random
   threshold: 0
   inputs:
-    # road_param: roads_parameters.xlsx
+    road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson
     other_labels: json_inputs/other_labels.geojson
     tiles: obj_detector/split_aoi_tiles.geojson
@@ -129,8 +129,8 @@ final_metrics.py:
 
 determine_class.py:
   initial_folder: data
-  processed_folder: outputs
-  final_folder: outputs/final
+  processed_folder: outputs/TLM
+  final_folder: outputs/TLM/final
   threshold: 0
   inputs:
     # road_param: roads_parameters.xlsx
