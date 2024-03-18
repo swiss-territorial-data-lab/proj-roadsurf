@@ -6,8 +6,8 @@ import morecantile
 
 import os
 import sys
-import argparse
 import yaml
+from argparse import ArgumentParser
 from loguru import logger
 from time import time
 from tqdm import tqdm
@@ -34,7 +34,7 @@ def determine_category(row):
 tic = time()
 logger.info('Starting...')
 
-parser = argparse.ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+parser = ArgumentParser(description="This script generates json labels for the STDL's object detector.")
 parser.add_argument('config_file', type=str, help='a YAML config file')
 args = parser.parse_args()
 
@@ -65,14 +65,6 @@ else:
 
     OUTPUT_DIR = cfg['output_folder']
 
-    # Based on the metadata
-    # Remove places, motorail, ferry, marked trace, climbing path and provisory pathes of soft mobility.
-    NOT_ROAD=[12, 13, 14, 19, 22, 23, 'Platz', 'Autozug', 'Faehre', 'Markierte Spur', 'Klettersteig', 'Provisorium']
-    # Only keep roads and uncovered bridges 
-    KUNSTBAUTE_TO_KEEP=[100, 200, 'Keine', 'Bruecke']
-    # Only keep roads with an artificial or a natural surface.
-    BELAGSART_TO_KEEP=[100, 200, 'Hart', 'Natur']
-
     if 'ok_tiles' in cfg.keys():
         OK_TILES = os.path.join(OUTPUT_DIR, cfg['ok_tiles'])
     else:
@@ -83,8 +75,18 @@ else:
     else:
         RESTRICTED_AOI_TRAIN = False
 
+    ONLY_OTH_LABELS = cfg['only_oth_labels'] if 'only_oth_labels' in cfg.keys() else False
+
     if GENERATE_TILES_INFO or GENERATE_LABELS:
         ZOOM_LEVEL = cfg['zoom_level']
+
+    # Based on the metadata
+    # Remove places, motorail, ferry, marked trace, climbing path and provisory pathes of soft mobility.
+    NOT_ROAD = [12, 13, 14, 19, 22, 23, 'Platz', 'Autozug', 'Faehre', 'Markierte Spur', 'Klettersteig', 'Provisorium']
+    # Only keep roads and uncovered bridges 
+    KUNSTBAUTE_TO_KEEP = [100, 200, 'Keine', 'Bruecke']
+    # Only keep roads with an artificial or a natural surface.
+    BELAGSART_TO_KEEP = [100, 200, 'Hart', 'Natur'] if not ONLY_OTH_LABELS else None
 
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
 path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json_inputs'))
@@ -248,7 +250,7 @@ if GENERATE_TILES_INFO:
     else:
         roi_in_aoi = roads_of_interest.copy()
 
-    roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, gdf_obj_name='roads')
+    roi_in_aoi=fct_misc.test_valid_geom(roi_in_aoi, correct=True, gdf_obj_name='roads')
 
     roi_in_aoi = roi_in_aoi[['OBJECTID', 'geometry']]
     
@@ -360,7 +362,11 @@ if GENERATE_LABELS:
     logger.info('Labels on tiles...')
     fct_misc.test_crs(labels_gdf.crs, tiles_in_restricted_aoi_4326.crs)
 
-    GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
+    if ONLY_OTH_LABELS:
+        logger.warning('All the passed labels will be saved as other labels and not as ground truth.')
+        GT_labels_gdf = gpd.GeoDataFrame(geometry=[])
+    else:
+        GT_labels_gdf = gpd.sjoin(labels_gdf, tiles_in_restricted_aoi_4326, how='inner', predicate='intersects')
 
     if not GT_labels_gdf.empty:
         # Exclude tile with undetermined roads
@@ -382,8 +388,9 @@ if GENERATE_LABELS:
 
     print()
     logger.info(f'{GT_labels_gdf.shape[0]} labels are saved as ground truth.')
-    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="artificial"].shape[0]} labels are tagged artificial')
-    logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="natrual"].shape[0]} labels are tagged natural.')
+    if not GT_labels_gdf.empty:
+        logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="artificial"].shape[0]} labels are tagged artificial')
+        logger.info(f'   - {GT_labels_gdf[GT_labels_gdf.CATEGORY=="natrual"].shape[0]} labels are tagged natural.')
     logger.info(f'{OTH_labels_gdf.shape[0]} labels are saved as the other labels.')
     print()
 

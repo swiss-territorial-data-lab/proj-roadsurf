@@ -2,14 +2,14 @@ import os
 import sys
 import time
 import yaml
+from argparse import ArgumentParser
 from loguru import logger
+from tqdm import tqdm
 
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import plotly.graph_objects as go
-
-from tqdm import tqdm
 
 import determine_class
 sys.path.insert(1, 'scripts')
@@ -181,9 +181,14 @@ if __name__ == "__main__":
     tic = time.time()
     logger.info('Starting...')
 
-    logger.info(f"Using config_obj_detec.yaml as config file.")
-    with open('config/config_obj_detec.yaml') as fp:
-            cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
+    parser = ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+    parser.add_argument('config_file', type=str, help='a YAML config file', default='config/config_obj_detect.yaml')
+    args = parser.parse_args()
+
+    logger.info(f"Using {args.config_file} as config file.")
+
+    with open(args.config_file) as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 
     # Define constants ------------------------------------

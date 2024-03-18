@@ -1,7 +1,9 @@
 # Procedure for automatic road detection with the object detector
 
 temp_prepare_ne.py:
-  roads: inputs/00-dombresson95_3_revetement.json
+  output_dir: outputs/canton/shapefiles_gpkg
+  roads: inputs/00-canton95_3_revetement.json
+  # forests: inputs/forests/swissTLM3D_TLM_BODENBEDECKUNG.shp
 
 prepare_data_obj_detec.py:
   tasks:
@@ -12,19 +14,20 @@ prepare_data_obj_detec.py:
     input_folder: inputs
     input_files:
       roads: roads/roads_of_interest.shp
-      roads_param: roads/roads_parameters.xlsx
+      # roads_param: roads/roads_parameters.xlsx
       # forests: ../data/swissTLM3D/forests.shp
       # aoi: aoi/aoi.gpkg
       # restricted_aoi_training: AOI/2_tiles_AOI.shp
   processed_input:
-    roads_for_labels: outputs/TLM/shapefiles_gpkg/roads_for_OD.shp
-  output_folder: outputs/TLM
+    roads_for_labels: outputs/canton/shapefiles_gpkg/roads_for_OD.shp
+  output_folder: outputs/canton
   # ok_tiles: <relative path from the output folder>
+  only_oth_labels: True
   zoom_level: 18  # keep between 17 and 20 
 
 limit_used_tiles.py:
   considered_datasets: trn, tst, val
-  working_directory: outputs/TLM/json_inputs
+  working_directory: outputs/canton/json_inputs
   input_directory: .
   output_directory: .
   ground_truth_labels: ground_truth_labels.geojson
@@ -32,7 +35,7 @@ limit_used_tiles.py:
   tiles: tiles_aoi.geojson
 
 generate_tilesets.py:
-  working_directory: outputs/TLM
+  working_directory: outputs/canton
   debug_mode: 
     enable: False
     nb_tiles_max: 100
@@ -42,7 +45,7 @@ generate_tilesets.py:
     other_labels_geojson: json_inputs/other_labels.geojson
     orthophotos_web_service:
       type: XYZ
-      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2020/3857/{z}/{x}/{y}.jpeg
+      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2023/3857/{z}/{x}/{y}.jpeg
       srs: "EPSG:3857"
   output_folder: obj_detector
   tile_size: 256 # per side, in pixels
@@ -59,11 +62,11 @@ generate_tilesets.py:
       url: https://www.swisstopo.admin.ch/fr/home/meta/conditions-generales/geodonnees/ogd.html
 
 calculate_statistics.py:
-  working_folder: outputs/TLM/obj_detector
+  working_folder: outputs/canton/obj_detector
   tiles: split_aoi_tiles.geojson
 
 train_model.py:
-  working_directory: outputs/TLM/obj_detector
+  working_directory: outputs/canton/obj_detector
   log_subfolder: logs
   sample_tagged_img_subfolder: sample_training_images
   COCO_files: # relative paths, w/ respect to the working_folder
@@ -75,7 +78,7 @@ train_model.py:
       model_zoo_checkpoint_url: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml"
       
 make_detections.py:
-  working_directory: outputs/TLM/obj_detector
+  working_directory: outputs/canton/obj_detector
   log_subfolder: logs
   sample_tagged_img_subfolder: sample_detection_images
   image_metadata_json: img_metadata.json
@@ -93,7 +96,7 @@ make_detections.py:
   score_lower_threshold: 0.05
   
 assess_detections.py:
-  working_directory: outputs/TLM
+  working_directory: outputs/canton
   datasets:
     ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
     other_labels_geojson: json_inputs/other_labels.geojson
@@ -109,12 +112,12 @@ assess_detections.py:
 
 final_metrics.py:
   initial_folder: data
-  processed_folder: outputs/TLM
-  final_folder: outputs/TLM/final
+  processed_folder: outputs/canton
+  final_folder: outputs/canton/final
   baseline: random      # all artificial or random
   threshold: 0
   inputs:
-    road_param: roads_parameters.xlsx
+    # road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson
     other_labels: json_inputs/other_labels.geojson
     tiles: obj_detector/split_aoi_tiles.geojson
@@ -129,8 +132,8 @@ final_metrics.py:
 
 determine_class.py:
   initial_folder: data
-  processed_folder: outputs/TLM
-  final_folder: outputs/TLM/final
+  processed_folder: outputs/canton
+  final_folder: outputs/canton/final
   threshold: 0
   inputs:
     # road_param: roads_parameters.xlsx
