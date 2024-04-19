@@ -14,9 +14,9 @@ prepare_data_obj_detec.py:
     input_folder: inputs
     input_files:
       roads: roads/roads_of_interest.shp
-      # roads_param: roads/roads_parameters.xlsx
+      roads_param: roads/roads_parameters.xlsx
       # forests: ../data/swissTLM3D/forests.shp
-      # aoi: aoi/aoi.gpkg
+      aoi: aoi/aoi.gpkg
       # restricted_aoi_training: AOI/2_tiles_AOI.shp
   processed_input:
     roads_for_labels: outputs/canton/shapefiles_gpkg/roads_for_OD.shp

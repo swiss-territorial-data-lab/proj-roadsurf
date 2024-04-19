@@ -86,7 +86,7 @@ else:
     # Only keep roads and uncovered bridges 
     KUNSTBAUTE_TO_KEEP = [100, 200, 'Keine', 'Bruecke']
     # Only keep roads with an artificial or a natural surface.
-    BELAGSART_TO_KEEP = [100, 200, 'Hart', 'Natur'] if not ONLY_OTH_LABELS else None
+    BELAGSART_TO_KEEP = [100, 200, 'Hart', 'Natur']
 
 path_shp_gpkg=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR, 'shapefiles_gpkg'))
 path_json=fct_misc.ensure_dir_exists(os.path.join(OUTPUT_DIR,'json_inputs'))
@@ -112,7 +112,7 @@ if DETERMINE_ROAD_SURFACES:
     roads_parameters_filtered=roads_parameters[~roads_parameters['Width'].isna()].copy()
     roads_parameters_filtered.drop_duplicates(subset='Type',inplace=True)       # Keep first by default 
 
-    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['Type','Width']], how='inner', left_on='OBJEKTART', right_on='Type')
+    uncovered_roads=uncovered_roads.merge(roads_parameters_filtered[['Type','Width', 'Priority level']], how='inner', left_on='OBJEKTART', right_on='Type')
 
     uncovered_roads.drop(columns=[
                                 'DATUM_AEND', 'DATUM_ERST', 'ERSTELLUNG', 'ERSTELLU_1', 'UUID',
@@ -130,6 +130,7 @@ if DETERMINE_ROAD_SURFACES:
 
     buffered_roads=uncovered_roads.copy()
     buffered_roads['geometry']=uncovered_roads.buffer(uncovered_roads['Width']/2, cap_style=2)
+    buffered_roads['geometry']=buffered_roads.buffer(0.01)
 
     # Erease artifact polygons produced by roundabouts
     buff_geometries=[]
@@ -147,7 +148,10 @@ if DETERMINE_ROAD_SURFACES:
     logger.info('----- Removing overlap between roads of different classes...')
 
     buffered_roads['saved_geom']=buffered_roads.geometry
-    joined_roads_in_aoi=gpd.sjoin(buffered_roads,buffered_roads[['OBJECTID','OBJEKTART','saved_geom','geometry']],how='left', lsuffix='1', rsuffix='2')
+    joined_roads_in_aoi=gpd.sjoin(
+        buffered_roads, buffered_roads[['OBJECTID','OBJEKTART', 'Priority level','saved_geom','geometry']],
+        how='left', lsuffix='1', rsuffix='2'
+    )
 
     ## Drop excessive rows
     intersected=joined_roads_in_aoi[joined_roads_in_aoi['OBJECTID_2'].notna()].copy()
@@ -157,15 +161,9 @@ if DETERMINE_ROAD_SURFACES:
     intersected_roads.reset_index(inplace=True, drop=True)
 
     ## Sort the roads so that the widest ones come first
-    intersected_roads.loc[intersected_roads['OBJEKTART_1']==20,'OBJEKTART_1']=8.5
-    intersected_roads.loc[intersected_roads['OBJEKTART_1']==21,'OBJEKTART_1']=2.5
+    intersect_other_width=intersected_roads[intersected_roads['Priority level_1']<intersected_roads['Priority level_2']].copy()
 
-    intersect_other_width=intersected_roads[intersected_roads['OBJEKTART_1']<intersected_roads['OBJEKTART_2']].copy()
-
-    intersect_other_width.sort_values(by=['OBJEKTART_1'],inplace=True)
-    intersect_other_width.loc[intersect_other_width['OBJEKTART_1']==8.5,'OBJEKTART_1']=20
-    intersect_other_width.loc[intersect_other_width['OBJEKTART_1']==2.5,'OBJEKTART_1']=21
-
+    intersect_other_width.sort_values(by=['Priority level_1'],inplace=True)
     intersect_other_width.sort_values(by=['KUNSTBAUTE'], ascending=False, inplace=True, ignore_index=True)
 
     ## cf. https://stackoverflow.com/questions/71738629/expand-polygons-in-geopandas-so-that-they-do-not-overlap-each-other
