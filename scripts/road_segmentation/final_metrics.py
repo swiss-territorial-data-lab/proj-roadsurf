@@ -2,14 +2,14 @@ import os
 import sys
 import time
 import yaml
+from argparse import ArgumentParser
 from loguru import logger
+from tqdm import tqdm
 
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import plotly.graph_objects as go
-
-from tqdm import tqdm
 
 import determine_class
 sys.path.insert(1, 'scripts')
@@ -18,6 +18,22 @@ import functions.fct_misc as fct_misc
 logger = fct_misc.format_logger(logger)
 
 # Definition of functions ---------------------------
+
+def determine_category(row):
+    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
+
+    if row['BELAGSART']==100:
+        return 'artificial'
+    elif row['BELAGSART']==200:
+        return 'natural'
+    elif row['BELAGSART']=='Hart':
+        return 'artificial'
+    elif row['BELAGSART']=='Natur':
+        return 'natural'
+    else:
+        logger.error(f"Unexpected class: {row['BELAGSART']}")
+        sys.exit(1)
+
 
 def get_metrics(comparison_df, CLASSES):
     '''
@@ -164,9 +180,14 @@ if __name__ == "__main__":
     tic = time.time()
     logger.info('Starting...')
 
-    logger.info(f"Using config_obj_detec.yaml as config file.")
-    with open('config/config_obj_detec.yaml') as fp:
-            cfg = yaml.load(fp, Loader=yaml.FullLoader)['final_metrics.py']
+    parser = ArgumentParser(description="This script calculates the metrics for the classficiation of road surfaces.")
+    parser.add_argument('config_file', type=str, help='a YAML config file', default='config/config_obj_detect.yaml')
+    args = parser.parse_args()
+
+    logger.info(f"Using {args.config_file} as config file.")
+
+    with open(args.config_file) as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
 
     # Define constants ------------------------------------
@@ -240,7 +261,7 @@ if __name__ == "__main__":
                                             how='inner',left_on='OBJEKTART',right_on='GDB-Code')
     filtered_ground_truth=filtered_ground_truth[filtered_ground_truth['BELAGSART']!=999997].copy()
 
-    filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_class.determine_category(row), axis=1)
+    filtered_ground_truth['CATEGORY']=filtered_ground_truth.apply(lambda row: determine_category(row), axis=1)
 
 
     logger.info('-- Roads in quarries are always naturals...')
@@ -260,9 +281,9 @@ if __name__ == "__main__":
     predictions_2056=predictions.to_crs(epsg=2056)
 
     predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
-    predicted_roads_filtered.drop(columns=['OBJEKTART', 'KUNSTBAUTE', 'BELAGSART', 'road_width', 'road_len',
-                                        'CATEGORY', 'SUPERCATEGORY', 'gt_type', 'GDB-Code', 'Width',
-                                            'title', 'tile_id', 'area_label', 'crs', 'joined_area'], inplace=True, errors='ignore')
+    predicted_roads_filtered = predicted_roads_filtered[
+        ['OBJECTID', 'dataset', 'score', 'det_class_name', 'weighted_score', 'area_pred_in_label', 'geometry']
+    ].copy()
 
     del visible_ground_truth_2056, ground_truth, predictions_2056
 

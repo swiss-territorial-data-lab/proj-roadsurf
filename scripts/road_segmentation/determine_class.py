@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import yaml
+from argparse import ArgumentParser
 from loguru import logger
 
 import pandas as pd
@@ -27,16 +28,6 @@ def get_corresponding_class(row, labels_id):
         logger.error(f"Unexpected class: {row['det_class']}")
         sys.exit(1)
 
-def determine_category(row):
-    'Get the class in words from the codes out of the swissTLM3D with the method apply.'
-
-    if row['BELAGSART']==100:
-        return 'artificial'
-    if row['BELAGSART']==200:
-        return 'natural'
-    else:
-        logger.error(f"Unexpected class: {row['BELAGSART']}")
-        sys.exit(1)
 
 def get_roads_in_quarries(quarries, roads):
     '''
@@ -58,6 +49,7 @@ def get_roads_in_quarries(quarries, roads):
                                     roads_in_quarries['OBJECTID'].unique().tolist())].reset_index(drop=True)
 
     return roads_in_quarries, roads_not_in_quarries
+
 
 def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
     '''
@@ -94,6 +86,7 @@ def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
 
     return clipped_labels_gdf
 
+
 def get_weighted_scores(ground_truth, predictions):
     '''
     Get the areas of intersection between the predictions and the labels and use them to weight the confidence score
@@ -115,9 +108,13 @@ def get_weighted_scores(ground_truth, predictions):
     all_predicted_roads['area_pred_in_label']=round(all_predicted_roads['joined_area']/all_predicted_roads['area_label'], 2)
     all_predicted_roads['weighted_score']=all_predicted_roads['area_pred_in_label']*all_predicted_roads['score']
 
-    predicted_roads=all_predicted_roads[all_predicted_roads.area_pred_in_label > 0.05].copy()
+    logger.info('Only consider joined area over 1 m2 and weighted score over 0.05.')
+    predicted_roads=all_predicted_roads[
+        (all_predicted_roads.joined_area > 1) & (all_predicted_roads.area_pred_in_label > 0.05)
+    ].copy()
 
     return predicted_roads
+
 
 def determine_detected_class(predictions, roads, threshold=0):
     '''
@@ -162,7 +159,19 @@ def determine_detected_class(predictions, roads, threshold=0):
         else:
             artificial_index=0
 
-        if artificial_index==natural_index:
+        # If the large majority of the predictions are for one type, attribute this type.
+        detection_type_count = intersecting_predictions.groupby(['det_class_name']).size().reset_index(name='count')
+        detection_type_count['percentage'] = detection_type_count['count'] / detection_type_count['count'].sum()
+
+        if any(detection_type_count.percentage.to_numpy() > 0.90) & (detection_type_count.shape[0] > 1):
+            final_type['road_id'].append(road_id)
+            final_type['cover_type'].append(
+                detection_type_count.loc[detection_type_count['count']==detection_type_count['count'].max(), 'det_class_name'].iloc[0]
+            )
+            final_type['diff_score'].append(pd.NA)
+
+        # Else, control the index values
+        elif artificial_index==natural_index:
             final_type['road_id'].append(road_id)
             final_type['cover_type'].append('undetermined')
             final_type['diff_score'].append(0)
@@ -189,14 +198,21 @@ def determine_detected_class(predictions, roads, threshold=0):
 
     return comparison_df
 
+
+
 if __name__ == "__main__":
 
     tic = time.time()
     logger.info('Starting...')
 
-    logger.info(f"Using config_obj_detec.yaml as config file.")
-    with open('config/config_obj_detec.yaml') as fp:
-            cfg = yaml.load(fp, Loader=yaml.FullLoader)['determine_class.py']
+    parser = ArgumentParser(description="This script generates COCO-annotated training/validation/test/other datasets for object detection tasks.")
+    parser.add_argument('config_file', type=str, help='a YAML config file', default='config/config_obj_detect.yaml')
+    args = parser.parse_args()
+
+    logger.info(f"Using {args.config_file} as config file.")
+
+    with open(args.config_file) as fp:
+        cfg = yaml.load(fp, Loader=yaml.FullLoader)[os.path.basename(__file__)]
 
     # Define constants ------------------------------------
 
@@ -258,7 +274,7 @@ if __name__ == "__main__":
 
     logger.info('Limiting the labels to the visible area of labels and predictions...')
 
-    visible_road_polys=clip_labels(filtered_road_polys, tiles[['title', 'id', 'geometry']])
+    visible_road_polys=clip_labels(filtered_road_polys, tiles[['title', 'id', 'geometry']].copy())
 
     logger.info('Getting the intersecting area between predictions and labels...')
 
@@ -274,3 +290,7 @@ if __name__ == "__main__":
     filepath=os.path.join(shp_gpkg_folder, 'types_from_detections.shp')
     final_roads.to_file(filepath)
     written_files.append(filepath)
+
+    logger.success('The following files were written:')
+    for file in written_files:
+        logger.success(file)
