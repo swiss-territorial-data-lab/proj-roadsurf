@@ -29,7 +29,7 @@ The procedure was performed on Ubuntu 20.04. <br>
 
 The following elements are needed:
 - this repository,
-- the [object detector repository](https://github.com/swiss-territorial-data-lab/object-detector),
+- the [object detector v2.0.2](https://github.com/swiss-territorial-data-lab/object-detector),
 - a CUDA-capable system.
 
 To prepare the environment:
