@@ -198,6 +198,7 @@ if __name__ == "__main__":
     FINAL_FOLDER=cfg['final_folder']
 
     BASELINE = cfg['baseline']
+    MIN_AREA = cfg['min_area']
 
     ROAD_PARAMETERS = os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param']) if 'road_param' in cfg['inputs'].keys() else False
 
@@ -286,7 +287,7 @@ if __name__ == "__main__":
     visible_ground_truth_2056=visible_ground_truth.to_crs(epsg=2056)
     predictions_2056=predictions.to_crs(epsg=2056)
 
-    predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056)
+    predicted_roads_filtered=determine_class.get_weighted_scores(visible_ground_truth_2056, predictions_2056, MIN_AREA)
     predicted_roads_filtered = predicted_roads_filtered[
         ['OBJECTID', 'dataset', 'score', 'det_class_name', 'weighted_score', 'area_pred_in_label', 'geometry']
     ].copy()

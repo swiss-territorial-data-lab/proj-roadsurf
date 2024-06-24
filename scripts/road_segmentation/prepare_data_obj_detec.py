@@ -229,10 +229,10 @@ if GENERATE_TILES_INFO:
     else:
         roads_of_interest = non_forest_roads.copy()
 
-    if BELAGSART_TO_KEEP:
+    try:
         roads_to_exclude=roads_of_interest[~roads_of_interest['BELAGSART'].isin(BELAGSART_TO_KEEP)]
         road_id_to_exclude=roads_to_exclude['OBJECTID'].unique().tolist()
-    else:
+    except KeyError:
         road_id_to_exclude = []
 
 
@@ -348,13 +348,17 @@ if GENERATE_LABELS:
         tiles_in_restricted_aoi_4326.drop(columns=['index_right'], inplace=True)
 
     # Attribute object category and supercategory to labels    
-    if BELAGSART_TO_KEEP:
+    try:
         labels_gdf_2056=non_forest_roads[non_forest_roads['BELAGSART'].isin(BELAGSART_TO_KEEP)].copy()
         labels_gdf_2056['CATEGORY']=labels_gdf_2056.apply(lambda row: determine_category(row), axis=1)
         labels_gdf = labels_gdf_2056.to_crs(epsg=4326)
         labels_gdf = fct_misc.test_valid_geom(labels_gdf, correct=True, gdf_obj_name='labels')
-    else:
-        labels_gdf = non_forest_roads.to_crs(epsg=4326)
+    except KeyError as e:
+        if str(e) == "'BELAGSART'":
+            labels_gdf = non_forest_roads.to_crs(epsg=4326)
+        else:
+            print(e)
+            sys.exit(1)
     labels_gdf['SUPERCATEGORY'] = 'road'
 
     logger.info('Labels on tiles...')

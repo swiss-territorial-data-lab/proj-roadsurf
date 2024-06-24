@@ -2,19 +2,20 @@
 
 temp_prepare_ne.py:
   output_dir: outputs/canton/shapefiles_gpkg
-  roads: inputs/00-canton95_3_revetement.json
+  roads: inputs/roads/NE_v2/00-canton95_3_revetement.json
   # forests: inputs/forests/swissTLM3D_TLM_BODENBEDECKUNG.shp
+  identifier: id
 
 prepare_data_obj_detec.py:
   tasks:
-    determine_roads_surfaces: True
+    determine_roads_surfaces: False
     generate_tiles_info: True
     generate_labels: True
   input:
     input_folder: inputs
     input_files:
-      roads: roads/roads_of_interest.shp
-      roads_param: roads/roads_parameters.xlsx
+      # roads: roads/TLM/roads_of_interest.shp
+      # roads_param: roads/TLM/roads_parameters.xlsx
       # forests: ../data/swissTLM3D/forests.shp
       aoi: aoi/aoi.gpkg
       # restricted_aoi_training: AOI/2_tiles_AOI.shp
@@ -40,12 +41,12 @@ generate_tilesets.py:
     enable: False
     nb_tiles_max: 100
   datasets:
-    aoi_tiles_geojson: json_inputs/tiles_aoi.geojson
-    # ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
-    other_labels_geojson: json_inputs/other_labels.geojson
-    orthophotos_web_service:
+    aoi_tiles: json_inputs/tiles_aoi.geojson
+    # ground_truth_labels: json_inputs/ground_truth_labels.geojson
+    other_labels: json_inputs/other_labels.geojson
+    image_source:
       type: XYZ
-      url: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/2023/3857/{z}/{x}/{y}.jpeg
+      location: https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/current/3857/{z}/{x}/{y}.jpeg
       srs: "EPSG:3857"
   output_folder: obj_detector
   tile_size: 256 # per side, in pixels
@@ -98,10 +99,10 @@ make_detections.py:
 assess_detections.py:
   working_directory: outputs/canton
   datasets:
-    ground_truth_labels_geojson: json_inputs/ground_truth_labels.geojson
-    other_labels_geojson: json_inputs/other_labels.geojson
+    ground_truth_labels: json_inputs/ground_truth_labels.geojson
+    other_labels: json_inputs/other_labels.geojson
     image_metadata_json: obj_detector/img_metadata.json
-    split_aoi_tiles_geojson: obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
+    split_aoi_tiles: obj_detector/split_aoi_tiles.geojson # aoi = Area of Interest
     detections:
       trn: obj_detector/trn_detections_at_0dot05_threshold.gpkg
       val: obj_detector/val_detections_at_0dot05_threshold.gpkg
@@ -115,7 +116,8 @@ final_metrics.py:
   processed_folder: outputs/canton
   final_folder: outputs/canton/final
   baseline: random      # all artificial or random
-  threshold: 0
+  threshold: 0          # used only if the val dataset is not given to determine the threshold
+  min_area: 1
   inputs:
     # road_param: roads_parameters.xlsx
     ground_truth: json_inputs/ground_truth_labels.geojson
@@ -135,6 +137,7 @@ determine_class.py:
   processed_folder: outputs/canton
   final_folder: outputs/canton/final
   threshold: 0
+  min_area: 1
   inputs:
     # road_param: roads_parameters.xlsx
     roads: json_inputs/other_labels.geojson

@@ -86,7 +86,7 @@ def clip_labels(labels_gdf, tiles_gdf, fact=0.99):
     return clipped_labels_gdf
 
 
-def get_weighted_scores(ground_truth, predictions):
+def get_weighted_scores(ground_truth, predictions, min_area=1):
     '''
     Get the areas of intersection between the predictions and the labels and use them to weight the confidence score
     based on the percentage between the intersection area and the label area.
@@ -107,9 +107,9 @@ def get_weighted_scores(ground_truth, predictions):
     all_predicted_roads['area_pred_in_label']=round(all_predicted_roads['joined_area']/all_predicted_roads['area_label'], 2)
     all_predicted_roads['weighted_score']=all_predicted_roads['area_pred_in_label']*all_predicted_roads['score']
 
-    logger.info('Only consider joined area over 1 m2 and weighted score over 0.05.')
+    logger.info(f'Only consider joined area over {min_area} m2 and weighted score over 0.05.')
     predicted_roads=all_predicted_roads[
-        (all_predicted_roads.joined_area > 1) & (all_predicted_roads.area_pred_in_label > 0.05)
+        (all_predicted_roads.joined_area > min_area) & (all_predicted_roads.area_pred_in_label > 0.05)
     ].copy()
 
     return predicted_roads
@@ -214,6 +214,7 @@ if __name__ == "__main__":
     FINAL_FOLDER=cfg['final_folder']
 
     THRESHOLD=cfg['threshold']
+    MIN_AREA=cfg['min_area']
 
     ROAD_PARAMETERS=os.path.join(INITIAL_FOLDER, cfg['inputs']['road_param']) if 'road_param' in cfg['inputs'].keys() else False
 
@@ -278,7 +279,7 @@ if __name__ == "__main__":
     visible_road_polys_2056=visible_road_polys.to_crs(epsg=2056)
     predictions_2056=predictions.to_crs(epsg=2056)
 
-    predicted_roads=get_weighted_scores(visible_road_polys_2056, predictions_2056)
+    predicted_roads=get_weighted_scores(visible_road_polys_2056, predictions_2056, MIN_AREA)
 
     del visible_road_polys_2056, initial_road_polygons, predictions_2056
 
