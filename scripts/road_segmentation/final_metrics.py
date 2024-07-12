@@ -83,8 +83,11 @@ def get_metrics(comparison_df, CLASSES):
     total_by_type=metrics_df['count'].sum()
 
     # Weighted metrics
-    weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_by_type
-    weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_by_type
+    if total_by_type > 0:
+        weighted_precision=(metrics_df['Pk']*metrics_df['count']).sum()/total_by_type
+        weighted_recall=(metrics_df['Rk']*metrics_df['count']).sum()/total_by_type
+    else:
+        weighted_precision, weighted_recall = (0, 0)
 
     if weighted_precision==0 and weighted_recall==0:
         weighted_f1_score=0
@@ -120,6 +123,7 @@ def get_tag(row):
         else:
             logger.error(f'Unexpected configuration: prediction class is {det_class} and ground truth class is {gt_class}.')
             sys.exit(1)
+
 
 def show_metrics(metrics_by_class, global_metrics):
     '''

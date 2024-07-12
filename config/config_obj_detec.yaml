@@ -146,3 +146,7 @@ determine_class.py:
     detections: obj_detector/oth_detections_at_0dot05_threshold.gpkg
     pred_layer: 
     quarries: quarries/quarries.shp
+
+metrics_per_area.py:
+  final_folder: outputs/canton/final
+  final_types: shp_gpkg/types_from_detections.shp
